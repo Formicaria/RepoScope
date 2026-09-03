@@ -1,0 +1,67 @@
+{
+  "name": "reposcope",
+  "version": "0.1.0",
+  "description": "Paste a repository, scan it, and immediately understand how the software is put together.",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Formicaria/RepoScope.git"
+  },
+  "homepage": "https://github.com/Formicaria/RepoScope#readme",
+  "bugs": {
+    "url": "https://github.com/Formicaria/RepoScope/issues"
+  },
+  "keywords": [
+    "architecture",
+    "code-analysis",
+    "dependency-graph",
+    "repository",
+    "visualization",
+    "react-flow"
+  ],
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c blue,magenta \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:web": "vite",
+    "dev:api": "tsx watch server/index.ts",
+    "build": "vite build",
+    "start": "NODE_ENV=production tsx server/index.ts",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "test": "vitest run",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "demo:generate": "tsx scripts/generate-demo.ts",
+    "scan:local": "tsx scripts/scan-local.ts",
+    "check": "npm run format:check && npm run typecheck && npm run test"
+  },
+  "dependencies": {
+    "@dagrejs/dagre": "^3.1.1",
+    "@xyflow/react": "^12.11.6",
+    "express": "^5.2.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "simple-git": "^3.36.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.4.1",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^10.0.5",
+    "playwright": "^1.62.1",
+    "prettier": "^3.9.6",
+    "prettier-plugin-tailwindcss": "^0.8.1",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
+  }
+}

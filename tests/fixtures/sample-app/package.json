@@ -1,0 +1,8 @@
+{
+  "name": "sample-app",
+  "version": "1.0.0",
+  "main": "src/server.ts",
+  "scripts": { "start": "tsx src/server.ts", "test": "vitest" },
+  "dependencies": { "express": "^4.19.0", "pg": "^8.11.0", "stripe": "^14.0.0", "lodash": "^4.17.21" },
+  "devDependencies": { "vitest": "^2.0.0", "typescript": "^5.5.0" }
+}

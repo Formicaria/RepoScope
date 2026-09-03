@@ -1,0 +1,10 @@
+node_modules
+dist
+.tmp
+*.log
+.env
+.DS_Store
+
+# test fixture intentionally contains these
+!tests/fixtures/sample-app/node_modules/
+!tests/fixtures/sample-app/.env

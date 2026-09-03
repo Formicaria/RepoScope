@@ -1,0 +1,1 @@
+export const AWS_KEY = 'AKIAZZZZQQQQ1234ABCD'
