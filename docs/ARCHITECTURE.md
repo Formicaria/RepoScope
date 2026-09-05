@@ -21,6 +21,7 @@ reposcope/
 │       ├── imports.ts      Import resolution per language + accuracy diagnostics
 │       ├── graph.ts        Files → modules → typed nodes, edges, importance
 │       ├── warnings.ts     Warning detectors + Tarjan cycle finder
+│       ├── review/         Code review rules (security, craft, product) + the runner
 │       ├── score.ts        Estimated health score
 │       ├── summary.ts      Template summary + SummaryProvider interface (optional LLM)
 │       └── paths.ts        Tiny posix path helpers
@@ -91,8 +92,15 @@ Edges are stored at the **finest level** (file → file, file → integration/st
    - Storage nodes come from `detectStorage`; integration nodes are created only for categorised dependencies that are actually imported. ORM nodes get a `dataflow` edge to the concrete database.
    - Importance = normalised `2·in + out + log2(files)` over module/entry nodes.
 5. **Warnings** (`warnings.ts`). Each detector appends `Warning`s; ids are attached to the relevant node, its file node and its parent. Cycles use an iterative Tarjan SCC over import edges. Secret detection never includes the matched text.
-6. **Score** (`score.ts`). Start at 100, apply deltas per signal, clamp, label. The breakdown is part of the result so the UI can show it.
-7. **Summary** (`summary.ts`). `buildTemplateSummary` writes the prose from facts; `SummaryProvider.summarize(draft, facts)` may rewrite `headline`/`description`/`architecture`. `providerFromEnv` returns the template provider unless `REPOSCOPE_LLM_URL` and `REPOSCOPE_LLM_MODEL` are set.
+6. **Review** (`review/`). Independent pure rules over a `ReviewContext` — files, parse
+   results with structural facts, the graph, dependencies and routes. Each returns findings
+   with evidence, a consequence and a fix; a rule that throws is skipped rather than losing
+   the review. The context distinguishes an application from a library (`isApplication`, from
+   root-level manifests) and excludes tests, examples, docs and generated files, because most
+   false positives come from judging code by standards that do not apply to it. Excerpts are
+   redacted before they leave the analyzer.
+7. **Score** (`score.ts`). Start at 100, apply deltas per signal, clamp, label. The breakdown is part of the result so the UI can show it.
+8. **Summary** (`summary.ts`). `buildTemplateSummary` writes the prose from facts; `SummaryProvider.summarize(draft, facts)` may rewrite `headline`/`description`/`architecture`. `providerFromEnv` returns the template provider unless `REPOSCOPE_LLM_URL` and `REPOSCOPE_LLM_MODEL` are set.
 
 `analyzeRepository` yields to the event loop between stages so progress updates reach the poller.
 

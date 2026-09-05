@@ -1,6 +1,6 @@
 {
   "name": "reposcope",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Paste a repository, scan it, and immediately understand how the software is put together.",
   "private": true,
   "license": "MIT",

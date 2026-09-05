@@ -1,7 +1,9 @@
 import type { ScanResult } from '../../shared/types'
 import { SeverityDot } from './ui'
+import { ReviewPanel } from './ReviewPanel'
 
-export type AnalysisTab = 'summary' | 'architecture' | 'findings' | 'actions' | 'warnings'
+export type AnalysisTab =
+  'summary' | 'architecture' | 'review' | 'findings' | 'actions' | 'warnings'
 
 export interface AnalysisPanelProps {
   result: ScanResult
@@ -15,6 +17,7 @@ export interface AnalysisPanelProps {
 const TABS: { id: AnalysisTab; label: string }[] = [
   { id: 'summary', label: 'Summary' },
   { id: 'architecture', label: 'Architecture' },
+  { id: 'review', label: 'Code review' },
   { id: 'findings', label: 'Key findings' },
   { id: 'actions', label: 'Next actions' },
   { id: 'warnings', label: 'Warnings' },
@@ -31,7 +34,7 @@ export function AnalysisPanel({
   const { summary, warnings } = result
   return (
     <section
-      className={`border-border bg-surface shrink-0 border-t transition-[height] duration-200 ${open ? 'h-[240px]' : 'h-9'} flex flex-col`}
+      className={`border-border bg-surface shrink-0 border-t transition-[height] duration-200 ${open ? (tab === 'review' ? 'h-[420px]' : 'h-[240px]') : 'h-9'} flex flex-col`}
     >
       <div className="flex h-9 shrink-0 items-center gap-1 px-2">
         <button
@@ -61,6 +64,11 @@ export function AnalysisPanel({
             }}
           >
             {t.label}
+            {t.id === 'review' && (result.review?.suggestions.length ?? 0) > 0 && (
+              <span className="bg-accent/15 text-accent ml-1.5 rounded-full px-1.5 text-[10px]">
+                {result.review!.suggestions.length}
+              </span>
+            )}
             {t.id === 'warnings' && warnings.length > 0 && (
               <span className="bg-warn/15 text-warn ml-1.5 rounded-full px-1.5 text-[10px]">
                 {warnings.length}
@@ -83,6 +91,14 @@ export function AnalysisPanel({
             </div>
           )}
           {tab === 'architecture' && <p className="text-muted max-w-3xl">{summary.architecture}</p>}
+          {tab === 'review' &&
+            (result.review ? (
+              <ReviewPanel review={result.review} onSelectNode={onSelectNode} />
+            ) : (
+              <p className="text-muted">
+                This scan predates the code review pass. Rescan the repository to see it.
+              </p>
+            ))}
           {tab === 'findings' && (
             <ul className="grid max-w-4xl gap-x-6 gap-y-3 md:grid-cols-2">
               {summary.keyFindings.map((f) => (

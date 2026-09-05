@@ -52,6 +52,9 @@ npm start
 <td><img src="docs/screenshots/inspector.png" alt="Node inspector with routes and warnings" /></td>
 <td><img src="docs/screenshots/expanded.png" alt="Expanded module showing its files" /></td>
 </tr>
+<tr>
+<td colspan="2"><img src="docs/screenshots/review-detail.png" alt="Code review finding with evidence and a specific fix" /></td>
+</tr>
 </table>
 
 - **Architecture map, not a folder tree.** Nodes are entry points, apps, APIs, services, UI layers, modules, storage and external integrations. Edges are imports, data flow, dependencies and test coverage. Colour and shape encode type; edge weight encodes how many files talk to each other.
@@ -59,6 +62,7 @@ npm start
 - **Inspector.** Click any node for its purpose, location, detected routes, dependencies, dependents, files and warnings.
 - **Analysis panel.** Project summary, architecture explanation, key findings, recommended next actions and the full warning list.
 - **Warnings** for unclear entry points, dead-looking modules, missing tests, duplicate functionality, excessive complexity, circular imports, exposed secrets, very large files and unused dependencies.
+- **A code review**, not just a map. 37 rules look for the things a senior engineer would raise in review — injection sinks, swallowed errors, secrets with hard-coded fallbacks, `any` used as an escape hatch, comments that restate the line below them, form fields with nothing to label them. Every finding names the file and line, explains the consequence, and says exactly what to change.
 - **Estimated health score** (0–100) from measurable signals, with the breakdown shown. It is labelled an estimate because that is what it is.
 - **Exports.** JSON of the full data model, a Markdown architecture report (with a Mermaid diagram), and a read-only share link.
 - **Folder upload** that reads files in your browser; `node_modules`, build output and `.git` never leave your machine, and secret files are listed by name only.
@@ -115,6 +119,27 @@ Every stage is a pure function over the previous stage's output, so the parser, 
 Files are parsed with [tree-sitter](https://tree-sitter.github.io/) grammars, so multi-line import lists, `import type`, re-exports and dynamic imports are read correctly — and imports that only appear inside comments, strings or template literals are correctly _not_ read. The grammars are an optional dependency. If they are missing or fail to load, the analyzer falls back to regular expressions — lower accuracy, no loss of function. Set `REPOSCOPE_NO_PARSE=1` to force that path.
 
 Route detection covers Express/Koa/Fastify/Hono, FastAPI/Flask, Next.js/SvelteKit/Nuxt file routes, Go `net/http`/gin/echo/chi/fiber, ASP.NET attributes, Spring, Rails `routes.rb`, Laravel and axum/actix. Storage detection covers the common ORMs and drivers across ecosystems plus `docker-compose` services and Prisma schemas. Found a gap? Open a [detection gap issue](.github/ISSUE_TEMPLATE/detection_gap.md).
+
+## The code review
+
+Alongside the map, RepoScope reviews the code it read. The rules are grouped by what they protect:
+
+| Category            | Examples                                                                                                                                                                                                                                                                                                                          |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Security**        | SQL and command injection through interpolation, `eval` / `pickle.loads` / `yaml.load`, XSS sinks, disabled TLS verification, weak hashing and predictable tokens, secrets with hard-coded fallbacks, open CORS, debug mode in committed config, request-derived file paths, missing security headers, unrate-limited auth routes |
+| **Reliability**     | Catch blocks that discard or merely log the error, missing React error boundaries, components that fetch without a loading or error state                                                                                                                                                                                         |
+| **Craft**           | Comments that restate the line below them, leftover TODOs and placeholder values, commented-out code, stray `console.log`, decorative comments, mixed naming conventions                                                                                                                                                          |
+| **Maintainability** | `any` as an escape hatch, oversized and deeply nested functions, long parameter lists, duplicated blocks, hard-coded environment URLs, loose TypeScript config, no linter                                                                                                                                                         |
+| **Accessibility**   | Images without `alt`, click handlers a keyboard cannot reach, form fields with nothing to label them                                                                                                                                                                                                                              |
+| **Testing & docs**  | No CI, untested security-sensitive modules, a thin or missing README, undocumented environment variables                                                                                                                                                                                                                          |
+
+Three things keep the list worth reading:
+
+- **Every finding cites a file and a line**, with the surrounding source redacted of anything that looks like a credential. A suggestion you cannot check is one you learn to skim past.
+- **Each says what to change**, concretely enough to act on — "pass values as parameters: `db.query("… = $1", [id])`", not "consider security best practices".
+- **Context decides severity.** Application-only rules do not fire on libraries; an injection sink in a compiler is reported at lower confidence than the same line in a request handler; examples, docs, generated code and test fixtures are excluded, because an example is _supposed_ to print to the console.
+
+It is static analysis over heuristics: it does not run the code, does not know what the product is meant to do, and will sometimes be wrong. That is why each finding carries a confidence and its evidence. It is a first reviewer, not a substitute for one — and not a substitute for a real SAST tool on code that handles money or personal data.
 
 ### Accuracy
 

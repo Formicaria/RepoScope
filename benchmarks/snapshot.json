@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-05T12:33:28.802Z",
-  "analyzer": "0.3.0",
+  "generatedAt": "2026-09-05T12:54:43.121Z",
+  "analyzer": "0.4.0",
   "repos": [
     {
       "name": "express",
@@ -33,8 +33,13 @@
       "warningKinds": {
         "excessive-complexity": 1
       },
-      "health": 92,
-      "ms": 491,
+      "health": 90,
+      "suggestions": 1,
+      "suggestionsHigh": 0,
+      "suggestionRules": [
+        "craft/narrating-comments"
+      ],
+      "ms": 739,
       "unresolvedSamples": []
     },
     {
@@ -75,8 +80,19 @@
       "warningKinds": {
         "circular-dependency": 1
       },
-      "health": 90,
-      "ms": 60,
+      "health": 70,
+      "suggestions": 7,
+      "suggestionsHigh": 2,
+      "suggestionRules": [
+        "craft/any-escape-hatch",
+        "documentation/no-env-example",
+        "maintainability/loose-type-checking",
+        "security/missing-security-headers",
+        "security/permissive-cors",
+        "security/secret-default-value",
+        "testing/no-continuous-integration"
+      ],
+      "ms": 104,
       "unresolvedSamples": []
     },
     {
@@ -127,8 +143,17 @@
         "missing-tests": 4,
         "unused-dependency": 1
       },
-      "health": 53,
-      "ms": 3003,
+      "health": 47,
+      "suggestions": 5,
+      "suggestionsHigh": 0,
+      "suggestionRules": [
+        "craft/duplicated-blocks",
+        "craft/narrating-comments",
+        "craft/oversized-functions",
+        "documentation/thin-readme",
+        "reliability/no-error-boundary"
+      ],
+      "ms": 3317,
       "unresolvedSamples": []
     },
     {
@@ -187,8 +212,28 @@
         "duplicate-functionality": 3,
         "unused-dependency": 1
       },
-      "health": 54,
-      "ms": 774,
+      "health": 38,
+      "suggestions": 18,
+      "suggestionsHigh": 1,
+      "suggestionRules": [
+        "accessibility/clickable-non-interactive",
+        "accessibility/images-without-alt",
+        "accessibility/inputs-without-labels",
+        "craft/any-escape-hatch",
+        "craft/commented-out-code",
+        "craft/debug-logging",
+        "craft/decorative-comments",
+        "craft/duplicated-blocks",
+        "craft/hard-coded-environment",
+        "craft/oversized-functions",
+        "craft/swallowed-errors",
+        "craft/undocumented-exports",
+        "documentation/thin-readme",
+        "reliability/fetch-without-states",
+        "reliability/no-error-boundary",
+        "security/xss-sink"
+      ],
+      "ms": 1411,
       "unresolvedSamples": []
     },
     {
@@ -230,8 +275,16 @@
         "duplicate-functionality": 1,
         "unused-dependency": 1
       },
-      "health": 79,
-      "ms": 212,
+      "health": 77,
+      "suggestions": 4,
+      "suggestionsHigh": 0,
+      "suggestionRules": [
+        "craft/commented-out-code",
+        "craft/long-parameter-lists",
+        "craft/oversized-functions",
+        "security/dynamic-code-execution"
+      ],
+      "ms": 376,
       "unresolvedSamples": []
     },
     {
@@ -269,8 +322,16 @@
         "exposed-secret": 4,
         "circular-dependency": 3
       },
-      "health": 84,
-      "ms": 325,
+      "health": 72,
+      "suggestions": 5,
+      "suggestionsHigh": 1,
+      "suggestionRules": [
+        "craft/leftover-scaffolding",
+        "craft/long-parameter-lists",
+        "craft/oversized-functions",
+        "security/tls-verification-disabled"
+      ],
+      "ms": 437,
       "unresolvedSamples": []
     },
     {
@@ -305,8 +366,16 @@
         "exposed-secret": 2,
         "unused-dependency": 1
       },
-      "health": 78,
-      "ms": 153,
+      "health": 74,
+      "suggestions": 4,
+      "suggestionsHigh": 0,
+      "suggestionRules": [
+        "craft/commented-out-code",
+        "craft/narrating-comments",
+        "craft/oversized-functions",
+        "maintainability/no-linter"
+      ],
+      "ms": 288,
       "unresolvedSamples": []
     },
     {
@@ -350,8 +419,15 @@
         "missing-tests": 9,
         "unused-dependency": 1
       },
-      "health": 75,
-      "ms": 583,
+      "health": 73,
+      "suggestions": 3,
+      "suggestionsHigh": 0,
+      "suggestionRules": [
+        "craft/commented-out-code",
+        "craft/duplicated-blocks",
+        "craft/leftover-scaffolding"
+      ],
+      "ms": 1220,
       "unresolvedSamples": [
         "mod:imp",
         "mod:index"
@@ -406,8 +482,23 @@
         "duplicate-functionality": 4,
         "unused-dependency": 1
       },
-      "health": 51,
-      "ms": 1799,
+      "health": 38,
+      "suggestions": 13,
+      "suggestionsHigh": 1,
+      "suggestionRules": [
+        "accessibility/inputs-without-labels",
+        "craft/any-escape-hatch",
+        "craft/commented-out-code",
+        "craft/duplicated-blocks",
+        "craft/hard-coded-environment",
+        "craft/leftover-scaffolding",
+        "craft/long-parameter-lists",
+        "craft/oversized-functions",
+        "craft/swallowed-errors",
+        "security/dynamic-code-execution",
+        "security/xss-sink"
+      ],
+      "ms": 3384,
       "unresolvedSamples": [
         "@vue/consolidate",
         "./utils",
@@ -455,7 +546,13 @@
         "dead-module": 1
       },
       "health": 64,
-      "ms": 22,
+      "suggestions": 2,
+      "suggestionsHigh": 0,
+      "suggestionRules": [
+        "craft/commented-out-code",
+        "testing/no-continuous-integration"
+      ],
+      "ms": 41,
       "unresolvedSamples": []
     }
   ]

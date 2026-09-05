@@ -96,6 +96,50 @@ export function toMarkdown(result: ScanResult): string {
   p('| --- | --- | --- |')
   for (const b of health.breakdown) p(`| ${b.signal} | ${b.delta} | ${b.note} |`)
   p()
+  const review = result.review
+  if (review && review.suggestions.length) {
+    p('## Code review')
+    p()
+    p(
+      `${review.suggestions.length} findings from ${review.rulesRun} rules across ${review.filesInspected} source files. These are static heuristics with evidence attached — check each against the cited line before acting.`,
+    )
+    p()
+    const order = ['critical', 'high', 'medium', 'low'] as const
+    for (const severity of order) {
+      const group = review.suggestions.filter((s) => s.severity === severity)
+      if (!group.length) continue
+      p(`### ${severity[0].toUpperCase()}${severity.slice(1)} (${group.length})`)
+      p()
+      for (const s of group) {
+        p(`#### ${s.title}`)
+        p()
+        p(
+          `\`${s.rule}\` · ${s.category} · ${s.effort}${s.confidence !== 'certain' ? ` · ${s.confidence}` : ''}`,
+        )
+        p()
+        p(s.detail)
+        p()
+        p(`**What to do:** ${s.fix}`)
+        p()
+        if (s.evidence.length) {
+          for (const e of s.evidence) {
+            p(
+              `- \`${e.path}${e.line ? ':' + e.line : ''}\`${e.excerpt ? ` — \`${e.excerpt.replace(/`/g, "'")}\`` : ''}`,
+            )
+          }
+          if (s.occurrences && s.occurrences > s.evidence.length)
+            p(`- …and ${s.occurrences - s.evidence.length} more`)
+          p()
+        }
+      }
+    }
+  } else if (review) {
+    p('## Code review')
+    p()
+    p(`No findings. ${review.rulesRun} rules ran across ${review.filesInspected} source files.`)
+    p()
+  }
+
   p('## Key findings')
   p()
   for (const f of summary.keyFindings) p(`- **${f.title}** (${f.kind}) — ${f.detail}`)

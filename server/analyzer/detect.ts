@@ -290,6 +290,11 @@ export const PYPI_IMPORT_NAMES: Record<string, string> = {
 
 export interface ManifestInfo {
   dependencies: Dependency[]
+  /**
+   * Dependencies declared by a manifest at the repository root. Example apps ship their own
+   * manifests, so the full list says Flask depends on Flask; this one does not.
+   */
+  rootDependencies: Set<string>
   frameworks: string[]
   /** Scripts / commands that hint at entry points (package.json main, bin, start). */
   entryHints: string[]
@@ -299,17 +304,20 @@ export interface ManifestInfo {
 
 export function detectManifests(files: RepoFile[]): ManifestInfo {
   const deps: Dependency[] = []
+  const rootDependencies = new Set<string>()
   const frameworks = new Set<string>()
   const entryHints: string[] = []
   const manifests: string[] = []
   let packageName: string | undefined
 
+  let currentIsRoot = false
   const add = (
     name: string,
     ecosystem: Dependency['ecosystem'],
     dev: boolean,
     version?: string,
   ) => {
+    if (currentIsRoot && !dev) rootDependencies.add(name)
     if (deps.some((d) => d.name === name && d.ecosystem === ecosystem)) return
     const known = KNOWN_DEPENDENCIES[name]
     if (known?.framework) frameworks.add(known.framework)
@@ -319,6 +327,7 @@ export function detectManifests(files: RepoFile[]): ManifestInfo {
   for (const f of files) {
     const name = basename(f.path)
     const dir = f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : ''
+    currentIsRoot = dir === ''
     if (name === 'package.json') {
       const pkg = parseJson(f.content)
       if (!pkg) continue
@@ -468,6 +477,7 @@ export function detectManifests(files: RepoFile[]): ManifestInfo {
 
   return {
     dependencies: deps,
+    rootDependencies,
     frameworks: [...frameworks],
     entryHints,
     packageName,

@@ -133,6 +133,67 @@ export interface ProjectSummary {
   nextActions: string[]
 }
 
+/* ---------------------------------------------------------------------- */
+/* Code review                                                              */
+/* ---------------------------------------------------------------------- */
+
+export type SuggestionCategory =
+  | 'security'
+  | 'reliability'
+  | 'maintainability'
+  | 'craft'
+  | 'accessibility'
+  | 'performance'
+  | 'testing'
+  | 'documentation'
+
+export type SuggestionSeverity = 'critical' | 'high' | 'medium' | 'low'
+
+/** How sure the rule is. Anything below `certain` is phrased as a question, not a verdict. */
+export type SuggestionConfidence = 'certain' | 'likely' | 'possible'
+
+export interface Evidence {
+  path: string
+  line?: number
+  /** A short, redacted excerpt. Never contains a secret value. */
+  excerpt?: string
+}
+
+export interface Suggestion {
+  id: string
+  /** Stable rule identifier, e.g. `security/sql-injection`. */
+  rule: string
+  category: SuggestionCategory
+  severity: SuggestionSeverity
+  confidence: SuggestionConfidence
+  /** What is wrong, specifically. */
+  title: string
+  /** Why it matters — the consequence, not a restatement. */
+  detail: string
+  /** What to change. Concrete enough to act on without further research. */
+  fix: string
+  /** Where it was found. Empty only for repository-wide findings. */
+  evidence: Evidence[]
+  /** Roughly how much work the fix is. */
+  effort: 'quick' | 'moderate' | 'large'
+  /** Total occurrences, when more were found than are listed as evidence. */
+  occurrences?: number
+  nodeId?: string
+}
+
+export interface ReviewSummary {
+  suggestions: Suggestion[]
+  /** Counts by category, for the panel headline. */
+  byCategory: Partial<Record<SuggestionCategory, number>>
+  bySeverity: Partial<Record<SuggestionSeverity, number>>
+  /** Rules that ran, so a clean result reads as "checked" rather than "not looked at". */
+  rulesRun: number
+  /** Files the rules could inspect with a real parser. */
+  filesInspected: number
+  /** Source files that were candidates for inspection. */
+  sourceFileCount: number
+}
+
 export interface ScanStats {
   files: number
   lines: number
@@ -169,16 +230,27 @@ export interface ScanResult {
   stats: ScanStats
   /** Optional: present for scans produced by this version of the analyzer. */
   diagnostics?: AnalysisDiagnostics
+  /** Actionable review findings. Optional so older stored scans still load. */
+  review?: ReviewSummary
 }
 
 export type ScanStage =
-  'queued' | 'reading' | 'structure' | 'dependencies' | 'services' | 'summary' | 'done' | 'error'
+  | 'queued'
+  | 'reading'
+  | 'structure'
+  | 'dependencies'
+  | 'services'
+  | 'review'
+  | 'summary'
+  | 'done'
+  | 'error'
 
 export const SCAN_STAGES: { stage: ScanStage; label: string }[] = [
   { stage: 'reading', label: 'Reading repository' },
   { stage: 'structure', label: 'Detecting project structure' },
   { stage: 'dependencies', label: 'Mapping dependencies' },
   { stage: 'services', label: 'Identifying services' },
+  { stage: 'review', label: 'Reviewing code quality' },
   { stage: 'summary', label: 'Generating architecture summary' },
 ]
 

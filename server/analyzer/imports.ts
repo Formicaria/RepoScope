@@ -1,6 +1,6 @@
 import type { RepoFile } from '../../shared/types.js'
 import { languageOf } from './detect.js'
-import { parseFile, type ParsedFile, type ParsedImport } from './parse.js'
+import { parseAll, type ParsedFile, type ParsedImport } from './parse.js'
 import { basename, dirname, joinNormalize, stripExt } from './paths.js'
 
 export interface FileImport {
@@ -759,12 +759,11 @@ function isLocalSpecifier(spec: string, lang: string | undefined, r: Resolver): 
  * that fails to parse) falls back to `extractSpecifiers`, so results degrade rather than
  * disappear. The returned diagnostics report how much was understood.
  */
-export async function analyzeImports(files: RepoFile[]): Promise<ImportAnalysis> {
-  const parsed = new Map<string, ParsedFile>()
-  for (const f of files) {
-    const p = await parseFile(f)
-    if (p) parsed.set(f.path, p)
-  }
+export async function analyzeImports(
+  files: RepoFile[],
+  preParsed?: Map<string, ParsedFile>,
+): Promise<ImportAnalysis> {
+  const parsed = preParsed ?? (await parseAll(files))
 
   const r = buildResolver(files, parsed)
   const out: FileImport[] = []

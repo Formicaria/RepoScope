@@ -8,6 +8,8 @@ import {
 } from './detect.js'
 import { buildGraph } from './graph.js'
 import { analyzeImports, workspaceDirectories } from './imports.js'
+import { parseAll } from './parse.js'
+import { runReview } from './review/index.js'
 import { computeHealth } from './score.js'
 import { buildTemplateSummary, templateProvider, type SummaryProvider } from './summary.js'
 import { detectWarnings } from './warnings.js'
@@ -52,7 +54,9 @@ export async function analyzeRepository(
 
   progress('dependencies', 45, 'Resolving imports')
   await tick()
-  const { imports, diagnostics } = await analyzeImports(files)
+  // Parse once; the import resolver and the review rules both read the result.
+  const parsed = await parseAll(files, { structure: true })
+  const { imports, diagnostics } = await analyzeImports(files, parsed)
 
   progress('services', 65, 'Identifying services, APIs and storage')
   await tick()
@@ -81,9 +85,28 @@ export async function analyzeRepository(
     entryPoints,
     hasImportsFor,
   })
-  const health = computeHealth({ files, graph, warnings, dependencies: manifests.dependencies })
+  progress('review', 80, 'Reviewing code quality and security')
+  await tick()
+  const review = runReview({
+    files,
+    parsed,
+    graph,
+    dependencies: manifests.dependencies,
+    routes,
+    entryPoints,
+    frameworks: manifests.frameworks,
+    rootDependencies: manifests.rootDependencies,
+  })
 
-  progress('summary', 85, 'Writing architecture summary')
+  const health = computeHealth({
+    files,
+    graph,
+    warnings,
+    dependencies: manifests.dependencies,
+    review,
+  })
+
+  progress('summary', 90, 'Writing architecture summary')
   await tick()
   const stats = {
     files: files.length,
@@ -95,6 +118,7 @@ export async function analyzeRepository(
   const facts = {
     repository,
     diagnostics,
+    review,
     languages,
     frameworks: manifests.frameworks,
     entryPoints,

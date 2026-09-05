@@ -38,6 +38,14 @@ Make the analysis right more often, and make it obvious _why_ the map looks the 
 - ⏳ **Frontend → backend edges.** Link a `fetch('/api/users')` call to the route that serves it.
 - ⏳ Smarter "unused dependency" detection (CLI tools, plugins referenced in config files, peer dependencies).
 
+## 0.35 — Review ✅
+
+- ✅ **Code review pass.** 37 rules with file, line, consequence and a specific fix, across security, reliability, maintainability, craft, accessibility, testing and documentation.
+- ⏳ **Per-rule suppression.** A `.reposcope.json` to switch off a rule or a path, so a team can tune the review to its own standards.
+- ⏳ **More languages in the craft rules.** The structural rules are strongest on TypeScript, JavaScript and Python; Go, Rust and C# get the line-based subset.
+- ⏳ **Dependency vulnerabilities.** Cross-reference the lockfile against an advisory database.
+- 💡 **Rule confidence from data.** Track which findings users dismiss and demote the noisy rules.
+
 ## 0.3 — Bigger repositories, faster
 
 - ⏳ **Persist scans** in SQLite (results, not source) so share links survive restarts and re-scans can diff.

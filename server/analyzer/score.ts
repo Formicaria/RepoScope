@@ -1,4 +1,10 @@
-import type { Dependency, HealthScore, RepoFile, Warning } from '../../shared/types.js'
+import type {
+  Dependency,
+  HealthScore,
+  RepoFile,
+  ReviewSummary,
+  Warning,
+} from '../../shared/types.js'
 import type { GraphOutput } from './graph.js'
 
 export interface ScoreInput {
@@ -6,6 +12,7 @@ export interface ScoreInput {
   graph: GraphOutput
   warnings: Warning[]
   dependencies: Dependency[]
+  review?: ReviewSummary
 }
 
 /**
@@ -142,6 +149,59 @@ export function computeHealth(input: ScoreInput): HealthScore {
   const large = count('large-file')
   if (large.length)
     apply('Large files', -Math.min(6, large.length * 2), `${large.length} very large file(s)`)
+
+  // Review findings move the score, but never dominate it: the warnings above already
+  // cover tests, secrets, cycles and complexity, and double-counting the same weaknesses
+  // produced scores that were not credible (a well-engineered compiler scoring 18/100).
+  // Only confident findings count — a `possible` one is worth reading, not scoring.
+  if (input.review) {
+    const REVIEW_BUDGET = 20
+    const confident = input.review.suggestions.filter((s) => s.confidence !== 'possible')
+    const pending: { signal: string; delta: number; note: string }[] = []
+
+    const security = confident.filter(
+      (s) => s.category === 'security' && (s.severity === 'critical' || s.severity === 'high'),
+    )
+    if (security.length)
+      pending.push({
+        signal: 'Security review',
+        delta: -Math.min(20, security.length * 8),
+        note: `${security.length} finding(s), e.g. ${security[0].rule}`,
+      })
+
+    const reliability = confident.filter((s) => s.category !== 'security' && s.severity === 'high')
+    if (reliability.length)
+      pending.push({
+        signal: 'Reliability review',
+        delta: -Math.min(8, reliability.length * 4),
+        note: `${reliability.length} high-severity finding(s)`,
+      })
+
+    const craft = confident.filter(
+      (s) => (s.category === 'craft' || s.category === 'maintainability') && s.severity !== 'low',
+    )
+    if (craft.length)
+      pending.push({
+        signal: 'Code craft',
+        delta: -Math.min(6, craft.length * 2),
+        note: `${craft.length} craft finding(s)`,
+      })
+
+    const a11y = confident.filter((s) => s.category === 'accessibility')
+    if (a11y.length)
+      pending.push({
+        signal: 'Accessibility',
+        delta: -Math.min(6, a11y.length * 3),
+        note: `${a11y.length} accessibility finding(s)`,
+      })
+
+    // Scale proportionally if the findings together would exceed the budget.
+    const raw = pending.reduce((n, p) => n + p.delta, 0)
+    const scale = raw < -REVIEW_BUDGET ? REVIEW_BUDGET / -raw : 1
+    for (const item of pending) apply(item.signal, Math.round(item.delta * scale), item.note)
+    if (!pending.length && input.review.filesInspected > 0)
+      apply('Code review', 0, `No confident findings across ${input.review.rulesRun} rules`)
+  }
 
   score = Math.max(0, Math.min(100, Math.round(score)))
   const label: HealthScore['label'] =

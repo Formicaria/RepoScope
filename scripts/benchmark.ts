@@ -54,6 +54,10 @@ export interface RepoMetrics {
   nodeTypes: Partial<Record<NodeType, number>>
   warningKinds: Partial<Record<WarningKind, number>>
   health: number
+  /** Review findings, and how many are high-severity — a proxy for false-positive noise. */
+  suggestions: number
+  suggestionsHigh: number
+  suggestionRules: string[]
   ms: number
   /** A few examples, to make a regression debuggable without re-running. */
   unresolvedSamples: string[]
@@ -135,6 +139,11 @@ async function measure(entry: CorpusEntry): Promise<RepoMetrics> {
     nodeTypes: tally(top.map((n) => n.type)),
     warningKinds: tally(result.warnings.map((w) => w.kind)),
     health: result.health.score,
+    suggestions: result.review?.suggestions.length ?? 0,
+    suggestionsHigh:
+      result.review?.suggestions.filter((s) => s.severity === 'critical' || s.severity === 'high')
+        .length ?? 0,
+    suggestionRules: [...new Set(result.review?.suggestions.map((s) => s.rule) ?? [])].sort(),
     ms,
     unresolvedSamples: [...new Set((d?.unresolvedLocal ?? []).map((u) => u.raw))].slice(0, 8),
   }
@@ -193,7 +202,8 @@ async function main() {
           `  parse coverage ${fmtDelta(before?.coverage, m.coverage)} · resolved ${fmtDelta(before?.resolvedInternal, m.resolvedInternal)}\n` +
           `  unresolved-local ${fmtDelta(before?.unresolvedLocal, m.unresolvedLocal, { lowerIsBetter: true })}` +
           ` (rate ${fmtDelta(before?.unresolvedLocalRate, m.unresolvedLocalRate, { lowerIsBetter: true })})\n` +
-          `  routes ${fmtDelta(before?.routes, m.routes)} · entries ${m.entryPoints.length} · health ${fmtDelta(before?.health, m.health)} · ${m.ms} ms\n`,
+          `  routes ${fmtDelta(before?.routes, m.routes)} · entries ${m.entryPoints.length} · health ${fmtDelta(before?.health, m.health)} · ${m.ms} ms\n` +
+          `  review ${fmtDelta(before?.suggestions, m.suggestions, { lowerIsBetter: true })} findings, ${fmtDelta(before?.suggestionsHigh, m.suggestionsHigh, { lowerIsBetter: true })} high\n`,
       )
       if (m.unresolvedSamples.length) {
         process.stdout.write(`  unresolved e.g. ${m.unresolvedSamples.slice(0, 5).join(', ')}\n`)

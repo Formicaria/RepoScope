@@ -6,6 +6,54 @@ All notable changes to RepoScope are documented here. The format follows [Keep a
 
 See [ROADMAP.md](ROADMAP.md) for what is planned next.
 
+## [0.4.0] — 2026-09-05
+
+RepoScope now reviews the code as well as mapping it.
+
+### Added
+
+- **Code review pass**: 37 rules across security, reliability, maintainability, craft,
+  accessibility, testing and documentation. Every finding names the file and line, explains
+  the consequence, and says specifically what to change. Findings carry a severity, a
+  confidence and an effort estimate, and are grouped into a new "Code review" tab, attached
+  to the relevant module in the inspector, counted in the sidebar and written into the
+  Markdown and JSON exports.
+- Security rules: SQL and command injection through interpolation, `eval` / `new Function` /
+  `pickle.loads` / `yaml.load`, XSS sinks, disabled TLS verification, weak hashing and
+  predictable token generation, secrets with hard-coded fallbacks, permissive CORS, debug
+  mode in committed config, request-derived filesystem paths, missing security headers,
+  unrate-limited authentication routes and unvalidated request bodies.
+- Craft rules aimed at code that reads as machine-generated or rushed: comments that restate
+  the line below them, swallowed errors, `any` used as an escape hatch, leftover TODOs and
+  placeholder values, commented-out code, stray `console.log`, oversized and deeply nested
+  functions, long parameter lists, duplicated blocks, mixed naming conventions, decorative
+  comments and hard-coded environment URLs.
+- Accessibility and UX rules: images without `alt`, click handlers a keyboard cannot reach,
+  form fields with nothing to label them, missing React error boundaries, and components that
+  fetch without a loading or error state.
+- Project rules: loose TypeScript configuration, no linter, no CI, a thin or missing README,
+  undocumented environment variables, and untested security-sensitive modules.
+- Structural extraction in the parser — functions with length, nesting and parameter counts,
+  catch blocks, call sites, JSX elements and attributes, comments and string literals — shared
+  with the import resolver so a scan still parses each file exactly once.
+- Review findings feed the health score under a capped budget, with each contribution shown
+  in the breakdown.
+
+### Fixed
+
+- Documentation, examples, generated files and CI configuration are excluded from the review:
+  an example is _supposed_ to print to the console and hard-code a URL.
+- Application-only rules (security headers, CORS, rate limiting, `.env.example`, debug mode)
+  no longer fire on libraries and frameworks, which is what they exist to be depended on for.
+  Root-level manifests decide this, so an example app's dependencies no longer make Flask
+  look like a Flask application.
+- Injection and XSS sinks in a library are reported at lower severity and confidence, because
+  whether untrusted input reaches them depends on callers — in a compiler, `new Function` is
+  usually the product.
+- Python and Ruby docstrings count as documentation; they live inside the function, not above it.
+- Every excerpt is redacted before it is displayed or exported: on a line that mentions a
+  secret by name, all string literals are replaced.
+
 ## [0.3.0] — 2026-09-05
 
 Accuracy release aimed at what the map actually shows. Health scores rose sharply on

@@ -43,5 +43,9 @@ When `resolvedInternal` moves a lot, look at the samples: parsing with a real gr
 the count on `vue-core` by 149 because the regex extractor had been matching import statements
 inside comments and compiler test fixtures — fewer edges, more correct map.
 
+A new review rule should be checked against the corpus before it ships. The differential is
+the test: quiet on Express and Flask, loud on an application with real problems. A rule that
+fires on every repository is measuring style, not defects.
+
 Repositories are cloned at their default branch, so a stale snapshot includes upstream drift.
 The commit SHA is recorded per repository and the tool says when it changed.

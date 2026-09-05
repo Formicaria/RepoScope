@@ -7,10 +7,12 @@ export function Sidebar({
   result,
   settings,
   onShowWarnings,
+  onShowReview,
 }: {
   result: ScanResult
   settings: Settings
   onShowWarnings: () => void
+  onShowReview: () => void
 }) {
   const { repository, health, languages, frameworks, stats } = result
   const scoreColor =
@@ -101,7 +103,22 @@ export function Sidebar({
       <div className="border-border bg-border grid grid-cols-2 gap-px border-b">
         <Stat label="Files" value={stats.files} />
         <Stat label="Modules" value={stats.modules} />
-        <Stat label="Connections" value={stats.connections} />
+        <button
+          className="bg-surface hover:bg-surface-2 p-3 text-left transition-colors"
+          onClick={onShowReview}
+          title="Show the code review"
+        >
+          <div className="text-muted text-[11px]">Review</div>
+          <div
+            className={`text-[18px] font-semibold tabular-nums ${
+              (result.review?.bySeverity.critical ?? 0) + (result.review?.bySeverity.high ?? 0) > 0
+                ? 'text-warn'
+                : ''
+            }`}
+          >
+            {result.review?.suggestions.length ?? '—'}
+          </div>
+        </button>
         <button
           className="bg-surface hover:bg-surface-2 p-3 text-left transition-colors"
           onClick={onShowWarnings}

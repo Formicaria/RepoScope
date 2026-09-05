@@ -170,6 +170,11 @@ export function MapView({
               setPanelOpen(true)
               setSidebarOpen(false)
             }}
+            onShowReview={() => {
+              setTab('review')
+              setPanelOpen(true)
+              setSidebarOpen(false)
+            }}
           />
         </div>
         {sidebarOpen && (

@@ -26,6 +26,9 @@ export function Inspector({
 }: InspectorProps) {
   const byId = new Map(result.nodes.map((n) => [n.id, n]))
   const warnings = result.warnings.filter((w) => node.warnings.includes(w.id))
+  const findings = (result.review?.suggestions ?? []).filter(
+    (s) => s.nodeId === node.id || s.evidence.some((e) => e.path === node.path),
+  )
   const parent = node.parent ? byId.get(node.parent) : undefined
   const related = (node.children ?? []).map((c) => byId.get(c)).filter((c): c is ProjectNode => !!c)
   const deps = node.dependencies.map((d) => byId.get(d)).filter((d): d is ProjectNode => !!d)
@@ -108,6 +111,30 @@ export function Inspector({
                   <div>
                     <div className="font-medium">{w.title}</div>
                     <div className="text-muted text-[11.5px] leading-relaxed">{w.detail}</div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
+
+        {findings.length > 0 && (
+          <Section label={`Review findings (${findings.length})`}>
+            <ul className="space-y-2">
+              {findings.slice(0, 6).map((f) => (
+                <li key={f.id} className="flex gap-2">
+                  <span
+                    className={`mt-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                      f.severity === 'critical'
+                        ? 'bg-danger'
+                        : f.severity === 'high'
+                          ? 'bg-warn'
+                          : 'bg-muted'
+                    }`}
+                  />
+                  <div>
+                    <div className="font-medium">{f.title}</div>
+                    <div className="text-muted text-[11.5px] leading-relaxed">{f.fix}</div>
                   </div>
                 </li>
               ))}

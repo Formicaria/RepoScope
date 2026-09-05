@@ -30,6 +30,71 @@ export interface ParsedFile {
   imports: ParsedImport[]
   /** Java/Kotlin/C#/PHP package or namespace declared by this file, when it has one. */
   packageName?: string
+  /** Structural facts used by the review rules; present only when requested. */
+  structure?: FileStructure
+}
+
+/* ------------------------------------------------------------------ */
+/* Structural facts                                                    */
+/* ------------------------------------------------------------------ */
+
+export interface FunctionInfo {
+  name: string
+  line: number
+  endLine: number
+  /** Physical lines, including the signature. */
+  lines: number
+  params: number
+  /** Deepest block nesting inside the body. */
+  maxNesting: number
+  isAsync: boolean
+  /** A doc comment immediately above the declaration. */
+  documented: boolean
+}
+
+export interface CatchInfo {
+  line: number
+  /** No statements at all, or only a comment. */
+  isEmpty: boolean
+  /** Logs and then carries on, so the caller never learns the operation failed. */
+  swallows: boolean
+  bindsError: boolean
+}
+
+export interface CallInfo {
+  /** The callee as written: `eval`, `res.send`, `cursor.execute`. */
+  name: string
+  line: number
+  /** Argument source text, trimmed; used to spot interpolation. */
+  args: string
+}
+
+export interface CommentInfo {
+  line: number
+  text: string
+}
+
+export interface JsxAttr {
+  element: string
+  name: string
+  line: number
+  value?: string
+}
+
+export interface FileStructure {
+  lines: number
+  functions: FunctionInfo[]
+  catches: CatchInfo[]
+  calls: CallInfo[]
+  comments: CommentInfo[]
+  /** JSX/TSX elements with the attribute names present on each. */
+  elements: { name: string; line: number; attrs: string[] }[]
+  attributes: JsxAttr[]
+  /** Explicit `any` type annotations (TypeScript). */
+  anyAnnotations: number
+  /** Non-empty string literals, for placeholder and hard-coded URL checks. */
+  strings: { line: number; value: string }[]
+  maxNesting: number
 }
 
 /** Grammar file (in tree-sitter-wasms/out) per RepoScope language, plus per-extension overrides. */
@@ -78,8 +143,11 @@ type AnyNode = {
   text: string
   startIndex: number
   startPosition: { row: number }
+  endPosition: { row: number }
   namedChildCount: number
+  childCount: number
   namedChild(i: number): AnyNode | null
+  child(i: number): AnyNode | null
   childForFieldName(name: string): AnyNode | null
   descendantsOfType(types: string | string[]): AnyNode[]
 }
@@ -536,6 +604,212 @@ const EXTRACTORS: Record<string, (root: AnyNode) => ParsedFile> = {
   cpp: extractC,
 }
 
+/* ------------------------------------------------------------------ */
+/* Structure extraction                                                */
+/* ------------------------------------------------------------------ */
+
+/** Node types that introduce a function scope, per grammar family. */
+const FUNCTION_NODES = new Set([
+  'function_declaration',
+  'function_definition',
+  'function_expression',
+  'function',
+  'arrow_function',
+  'method_definition',
+  'method_declaration',
+  'generator_function_declaration',
+  'constructor_declaration',
+])
+
+/** Node types that add a level of nesting worth counting. */
+const NESTING_NODES = new Set([
+  'if_statement',
+  'for_statement',
+  'for_in_statement',
+  'for_of_statement',
+  'while_statement',
+  'do_statement',
+  'switch_statement',
+  'try_statement',
+  'with_statement',
+  'match_statement',
+  'case_clause',
+  'catch_clause',
+  'conditional_expression',
+  'elif_clause',
+])
+
+const CATCH_NODES = new Set(['catch_clause', 'except_clause', 'rescue'])
+const CALL_NODES = new Set(['call_expression', 'call', 'new_expression', 'method_invocation'])
+const STRING_NODES = new Set([
+  'string',
+  'string_literal',
+  'template_string',
+  'interpreted_string_literal',
+])
+
+function nodeName(n: AnyNode): string {
+  const name = n.childForFieldName('name')
+  if (name) return name.text
+  // `const handler = () => {}` / `foo: function () {}`
+  const parentText = n.text.slice(0, 60)
+  return parentText.startsWith('function') ? 'anonymous' : 'anonymous'
+}
+
+function countParams(n: AnyNode): number {
+  const params = n.childForFieldName('parameters') ?? n.childForFieldName('parameter_list')
+  if (!params) return 0
+  let count = 0
+  for (let i = 0; i < params.namedChildCount; i++) {
+    const c = params.namedChild(i)
+    if (c && c.type !== 'comment') count++
+  }
+  return count
+}
+
+function maxNestingWithin(node: AnyNode, depth = 0): number {
+  let deepest = depth
+  for (let i = 0; i < node.namedChildCount; i++) {
+    const c = node.namedChild(i)
+    if (!c) continue
+    // A nested function starts its own budget rather than inheriting this one.
+    if (FUNCTION_NODES.has(c.type)) continue
+    const next = NESTING_NODES.has(c.type) ? depth + 1 : depth
+    deepest = Math.max(deepest, maxNestingWithin(c, next))
+  }
+  return deepest
+}
+
+/**
+ * Walk a parsed file once and record the facts the review rules need.
+ *
+ * Everything here is a plain measurement — how long a function is, whether a catch block
+ * rethrows, which attributes a JSX element carries. Judging those facts is the rules'
+ * job, which keeps the judgement reviewable and this function boring.
+ */
+function extractStructure(root: AnyNode, source: string, grammar: string): FileStructure {
+  const structure: FileStructure = {
+    lines: source.split('\n').length,
+    functions: [],
+    catches: [],
+    calls: [],
+    comments: [],
+    elements: [],
+    attributes: [],
+    anyAnnotations: 0,
+    strings: [],
+    maxNesting: 0,
+  }
+  const commentLines = new Set<number>()
+
+  walk(root, (n) => {
+    if (n.type === 'comment' || n.type === 'line_comment' || n.type === 'block_comment') {
+      const text = n.text.replace(/^\s*(\/\/+|#+|\/\*+|\*+)\s?/gm, '').replace(/\*\/\s*$/, '')
+      structure.comments.push({ line: line(n), text: text.trim() })
+      for (let r = n.startPosition.row; r <= n.endPosition.row; r++) commentLines.add(r + 1)
+      return false
+    }
+
+    if (FUNCTION_NODES.has(n.type)) {
+      const body = n.childForFieldName('body')
+      const startLine = line(n)
+      const endLine = n.endPosition.row + 1
+      const above = startLine - 1
+      // Python and Ruby document a function with a string as the first statement in the
+      // body, not with a comment above the signature.
+      const firstStatement = body?.namedChild(0)
+      const hasDocstring =
+        !!firstStatement &&
+        (STRING_NODES.has(firstStatement.type) ||
+          (firstStatement.type === 'expression_statement' &&
+            !!firstStatement.namedChild(0) &&
+            STRING_NODES.has(firstStatement.namedChild(0)!.type)))
+      structure.functions.push({
+        name: nodeName(n),
+        line: startLine,
+        endLine,
+        lines: endLine - startLine + 1,
+        params: countParams(n),
+        maxNesting: body ? maxNestingWithin(body) : 0,
+        isAsync: /^\s*(export\s+)?(default\s+)?async\b/.test(n.text),
+        documented: hasDocstring || commentLines.has(above) || commentLines.has(above - 1),
+      })
+      return
+    }
+
+    if (CATCH_NODES.has(n.type)) {
+      const body = n.childForFieldName('body') ?? n
+      const inner = body.text.replace(/^[\s{}:]*|[\s{}]*$/g, '')
+      const withoutComments = inner
+        .split('\n')
+        .filter((l) => !/^\s*(\/\/|#|\*|\/\*)/.test(l))
+        .join('\n')
+        .trim()
+      const isEmpty = withoutComments === '' || /^(pass|;)$/.test(withoutComments)
+      const rethrows = /\b(throw|raise)\b/.test(withoutComments)
+      const returnsOrHandles =
+        /\b(return|res\.|reply\.|next\(|reject\(|abort|exit|process\.exit)/.test(withoutComments)
+      const logsOnly =
+        /\b(console\.(log|error|warn)|logger?\.|print\(|log\.)/.test(withoutComments) &&
+        !rethrows &&
+        !returnsOrHandles
+      structure.catches.push({
+        line: line(n),
+        isEmpty,
+        swallows: isEmpty || logsOnly,
+        bindsError: !!(n.childForFieldName('parameter') ?? n.childForFieldName('value')),
+      })
+      return
+    }
+
+    if (CALL_NODES.has(n.type)) {
+      const fn = n.childForFieldName('function') ?? n.childForFieldName('constructor')
+      const args = n.childForFieldName('arguments')
+      if (fn) {
+        structure.calls.push({
+          name: fn.text.replace(/\s+/g, '').slice(0, 80),
+          line: line(n),
+          args: (args?.text ?? '').replace(/\s+/g, ' ').slice(0, 400),
+        })
+      }
+      return
+    }
+
+    if (n.type === 'jsx_opening_element' || n.type === 'jsx_self_closing_element') {
+      const nameNode = n.childForFieldName('name')
+      const attrs: string[] = []
+      for (const a of n.descendantsOfType('jsx_attribute')) {
+        const an = a.childForFieldName('name') ?? a.namedChild(0)
+        if (!an) continue
+        attrs.push(an.text)
+        structure.attributes.push({
+          element: nameNode?.text ?? '?',
+          name: an.text,
+          line: line(a),
+          value: a.namedChild(1)?.text?.slice(0, 120),
+        })
+      }
+      structure.elements.push({ name: nameNode?.text ?? '?', line: line(n), attrs })
+      return
+    }
+
+    if (grammar !== 'python' && n.type === 'predefined_type' && n.text === 'any') {
+      structure.anyAnnotations++
+      return
+    }
+
+    if (STRING_NODES.has(n.type)) {
+      const value = unquote(n.text)
+      if (value.length > 1 && value.length < 300) structure.strings.push({ line: line(n), value })
+      return false
+    }
+    return
+  })
+
+  structure.maxNesting = maxNestingWithin(root)
+  return structure
+}
+
 const SFC_EXTENSIONS = /\.(vue|svelte|astro)$/i
 const SCRIPT_BLOCK = /<script\b[^>]*>([\s\S]*?)<\/script>/gi
 const ASTRO_FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/
@@ -572,7 +846,15 @@ export function extractComponentScript(path: string, content: string): string | 
  * Parse one file's imports. Returns undefined when no grammar applies, the file is too
  * large, or parsing fails — callers fall back to the regex extractor.
  */
-export async function parseFile(file: RepoFile): Promise<ParsedFile | undefined> {
+export interface ParseOptions {
+  /** Also collect the structural facts the review rules need. */
+  structure?: boolean
+}
+
+export async function parseFile(
+  file: RepoFile,
+  options: ParseOptions = {},
+): Promise<ParsedFile | undefined> {
   if (!file.content || file.content.length > MAX_PARSE_BYTES) return undefined
   const grammar = grammarFor(file.path)
   if (!grammar) return undefined
@@ -590,7 +872,9 @@ export async function parseFile(file: RepoFile): Promise<ParsedFile | undefined>
   try {
     tree = parser.parse(source)
     if (!tree) return undefined
-    return extract(tree.rootNode)
+    const parsed = extract(tree.rootNode)
+    if (options.structure) parsed.structure = extractStructure(tree.rootNode, source, grammar)
+    return parsed
   } catch {
     return undefined
   } finally {
@@ -600,6 +884,22 @@ export async function parseFile(file: RepoFile): Promise<ParsedFile | undefined>
       /* already gone */
     }
   }
+}
+
+/**
+ * Parse every file once. Both the import resolver and the review rules read the result, so
+ * a scan never parses the same file twice.
+ */
+export async function parseAll(
+  files: RepoFile[],
+  options: ParseOptions = {},
+): Promise<Map<string, ParsedFile>> {
+  const out = new Map<string, ParsedFile>()
+  for (const f of files) {
+    const parsed = await parseFile(f, options)
+    if (parsed) out.set(f.path, parsed)
+  }
+  return out
 }
 
 /** True when at least one grammar loaded successfully (used for diagnostics). */
