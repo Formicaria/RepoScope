@@ -6,6 +6,33 @@ All notable changes to RepoScope are documented here. The format follows [Keep a
 
 See [ROADMAP.md](ROADMAP.md) for what is planned next.
 
+## [0.2.0] — 2026-09-05
+
+Accuracy release. The unresolved-local rate across the benchmark corpus fell from 3.4% to 0.6%.
+
+### Added
+
+- Syntax-tree import extraction using tree-sitter grammars for TypeScript, TSX, JavaScript, Python, Go, Rust, C#, Java, Kotlin, Scala, Ruby, PHP and C/C++. Multi-line import lists, `import type`, re-exports, `import()` and `require()` are read correctly, and imports appearing inside comments, strings or template literals are no longer mistaken for real ones.
+- Workspace package resolution: every `package.json`, `go.mod` and `Cargo.toml` in the repository maps its declared name to its folder, so `@acme/ui` links to `packages/ui` rather than looking like a third-party package. Covers npm/pnpm/yarn workspaces, Go multi-module repositories and Cargo workspace crates.
+- Java, Kotlin and Scala imports now resolve internally through the `package` each file declares.
+- Vite/Vitest/Nuxt/Astro `resolve.alias` entries, `jsconfig.json` paths and SvelteKit's `$lib` are honoured.
+- Python `from . import module` and `from pkg import submodule` resolve to the module they name.
+- `npm run bench` benchmark harness over a ten-repository corpus, with a committed snapshot, a `--diff` mode and a weekly CI workflow.
+- Import diagnostics on every scan (`ScanResult.diagnostics`): files parsed versus regex-scanned, and every specifier that pointed inside the repository but failed to resolve.
+- CI job that runs the suite with the optional grammars removed.
+
+### Fixed
+
+- Imports of the repository root (`require('../..')`) produced a path with a leading slash and never resolved.
+- `tsconfig` path aliases with a wildcard in the middle of the target (`"@vue/*": ["packages/*/src"]`) had the wildcard position discarded, so every such import failed to resolve.
+- Asset and build-output specifiers (`./logo.png`, `./dist/bundle.cjs.js`) are no longer reported as unresolved; ingest filters those files on purpose.
+
+### Changed
+
+- `analyzeImports` is now asynchronous and returns `{ imports, diagnostics }`.
+- Type-only imports create edges with lower confidence than value imports.
+- `web-tree-sitter` and `tree-sitter-wasms` are optional dependencies; without them the analyzer falls back to regular expressions.
+
 ## [0.1.0] — 2026-09-03
 
 First working end-to-end MVP.

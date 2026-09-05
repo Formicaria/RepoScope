@@ -17,17 +17,22 @@ Shipped. Paste a public GitHub URL or upload a folder, watch the five-stage scan
 - ✅ Optional OpenAI-compatible summary provider behind an interface
 - ✅ Tests for parsing, graph generation, warnings, scoring and export; CI
 
-## 0.2 — Trust the map
+## 0.2 — Trust the map 🚧
 
 Make the analysis right more often, and make it obvious _why_ the map looks the way it does.
 
+- ✅ **Real parsers.** Imports come from tree-sitter syntax trees instead of regular expressions, so multi-line lists, `import type`, re-exports and dynamic imports are read correctly — and imports inside comments, strings and template literals are not. The grammars are optional; the regex path still works without them.
+- ✅ **Workspace and alias resolution.** tsconfig/jsconfig `paths` with a wildcard anywhere in the target, Vite aliases, SvelteKit `$lib`, npm/pnpm workspace packages, Go multi-module repositories and Cargo workspace crates.
+- ✅ **Java / Kotlin / Scala internal resolution** through the `package` each file declares.
+- ✅ **Benchmark corpus.** `npm run bench` scans ten public repositories and diffs against a committed snapshot; the unresolved-local rate fell from 3.4% to 0.6%.
 - ⏳ **Edge evidence.** Hover or click an aggregated edge to see the actual file-to-file imports behind it.
 - ⏳ **Explain this classification.** Each module node shows which rule typed it (folder name, route density, JSX share, …) so mis-typings are debuggable and reportable.
 - ⏳ **Two-level hierarchy for monorepos.** App/package → module → file, with collapsible package groups, instead of flattening every sub-folder of a large package.
-- ⏳ **Java / Kotlin internal resolution** from `package` declarations, and **C# project references** from `.csproj`.
+- ⏳ **C# project references** from `.csproj`, and NuGet-style namespace disambiguation.
 - ⏳ **Django `urls.py`, NestJS decorators, tRPC and GraphQL schema routes.**
 - ⏳ **Framework-aware entry points** (Next.js `app/`, Nuxt, SvelteKit, Django `manage.py` + `wsgi`) with a clear "primary" entry instead of a list.
-- ⏳ **Benchmark corpus.** A script that scans ~20 well-known public repositories and snapshots node types, edge counts and warnings, so analyzer changes show their diff in CI.
+- ⏳ **Symbol-level edges.** Use the names each import binds (already parsed) so a barrel import does not imply a dependency on everything the barrel re-exports.
+- ⏳ **Frontend → backend edges.** Link a `fetch('/api/users')` call to the route that serves it.
 - ⏳ Smarter "unused dependency" detection (CLI tools, plugins referenced in config files, peer dependencies).
 
 ## 0.3 — Bigger repositories, faster

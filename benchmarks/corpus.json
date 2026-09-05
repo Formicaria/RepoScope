@@ -1,0 +1,55 @@
+{
+  "$comment": "Public repositories scanned by `npm run bench`. Chosen to cover the language, framework and layout combinations RepoScope claims to understand. Keep them small enough to clone quickly.",
+  "repos": [
+    {
+      "name": "express",
+      "url": "https://github.com/expressjs/express",
+      "why": "JavaScript library, no build step, examples folder"
+    },
+    {
+      "name": "realworld-express",
+      "url": "https://github.com/gothinkster/node-express-realworld-example-app",
+      "why": "TypeScript + Express + Prisma, classic layered backend"
+    },
+    {
+      "name": "fastapi-fullstack",
+      "url": "https://github.com/fastapi/full-stack-fastapi-template",
+      "why": "Python backend + React frontend in one repo"
+    },
+    {
+      "name": "linkwarden",
+      "url": "https://github.com/linkwarden/linkwarden",
+      "why": "TypeScript monorepo: apps/ + packages/, Next.js, Prisma"
+    },
+    {
+      "name": "flask",
+      "url": "https://github.com/pallets/flask",
+      "why": "Python library with src/ layout and a large test suite"
+    },
+    {
+      "name": "httpie-cli",
+      "url": "https://github.com/httpie/cli",
+      "why": "Python CLI, entry point via console_scripts"
+    },
+    {
+      "name": "chi",
+      "url": "https://github.com/go-chi/chi",
+      "why": "Go library, middleware packages"
+    },
+    {
+      "name": "ripgrep",
+      "url": "https://github.com/BurntSushi/ripgrep",
+      "why": "Rust workspace with crates/"
+    },
+    {
+      "name": "vue-core",
+      "url": "https://github.com/vuejs/core",
+      "why": "TypeScript monorepo with pnpm workspaces and tsconfig path aliases"
+    },
+    {
+      "name": "svelte-realworld",
+      "url": "https://github.com/sveltejs/realworld",
+      "why": "SvelteKit file-based routing"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+name: Analyzer benchmark
+
+# Scanning ten real repositories is too slow for every push, so this runs on demand and
+# weekly. It reports the accuracy delta against the committed snapshot; it never fails the
+# build, because upstream repositories move on their own.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Scan the corpus and diff against the snapshot
+        run: npm run bench -- --diff | tee bench.txt
+      - name: Publish the report
+        run: |
+          {
+            echo '## Analyzer benchmark'
+            echo '```'
+            cat bench.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

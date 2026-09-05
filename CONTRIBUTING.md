@@ -18,12 +18,19 @@ Useful while working on the analyzer:
 ```bash
 npm run scan:local -- ../some-repo          # human-readable summary
 npm run scan:local -- ../some-repo --json   # full ScanResult
+npm run bench -- --diff                     # accuracy delta across the corpus
+npm run bench -- --only flask,chi           # just two of them, while iterating
 ```
+
+The tree-sitter grammars are optional dependencies. The analyzer must keep working without
+them, so check your change against the regex fallback too — `REPOSCOPE_NO_PARSE=1 npm test`,
+which is what the `fallback` CI job runs.
 
 ## What makes a good pull request
 
 - **One concern per PR.** A new route pattern, a UI fix and a scoring tweak are three PRs.
 - **Analyzer changes come with a test** in `tests/analyzer.test.ts`. Extend `tests/fixtures/sample-app` if the existing fixture doesn't cover your case — keep it tiny and synthetic.
+- **Analyzer changes come with benchmark numbers.** Run `npm run bench -- --diff` and paste the delta into the PR. A change that improves one repository and quietly breaks three is visible there and nowhere else.
 - **Verify against a real repository** and say which one in the PR description. The map should still make sense for it.
 - **UI changes come with a screenshot.**
 - Keep the product simple. New controls, panels and settings need a strong reason; the map should stay understandable without documentation.

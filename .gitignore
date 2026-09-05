@@ -8,3 +8,4 @@ dist
 # test fixture intentionally contains these
 !tests/fixtures/sample-app/node_modules/
 !tests/fixtures/sample-app/.env
+.bench-cache

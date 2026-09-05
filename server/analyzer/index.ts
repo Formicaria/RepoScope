@@ -52,7 +52,7 @@ export async function analyzeRepository(
 
   progress('dependencies', 45, 'Resolving imports')
   await tick()
-  const imports = analyzeImports(files)
+  const { imports, diagnostics } = await analyzeImports(files)
 
   progress('services', 65, 'Identifying services, APIs and storage')
   await tick()
@@ -93,6 +93,7 @@ export async function analyzeRepository(
   }
   const facts = {
     repository,
+    diagnostics,
     languages,
     frameworks: manifests.frameworks,
     entryPoints,

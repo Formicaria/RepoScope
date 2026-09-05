@@ -17,7 +17,8 @@ reposcope/
 │       ├── index.ts        analyzeRepository(): runs the stages below, reports progress
 │       ├── ingest.ts       Ignore rules, size caps, secret-file handling (disk + upload)
 │       ├── detect.ts       Languages, manifests → dependencies & frameworks, entry points, routes, storage
-│       ├── imports.ts      Import extraction + resolution per language
+│       ├── parse.ts        tree-sitter grammars: syntax-tree import extraction (optional)
+│       ├── imports.ts      Import resolution per language + accuracy diagnostics
 │       ├── graph.ts        Files → modules → typed nodes, edges, importance
 │       ├── warnings.ts     Warning detectors + Tarjan cycle finder
 │       ├── score.ts        Estimated health score
@@ -33,7 +34,8 @@ reposcope/
 │   │   ├── export.ts       Download helpers (report builders live in shared/)
 │   │   └── nodeStyles.ts   Colours, labels, legend order
 │   └── data/demo.json      Bundled demo scan (regenerate with npm run demo:generate)
-├── scripts/                scan-local.ts (CLI), generate-demo.ts
+├── scripts/                scan-local.ts (CLI), generate-demo.ts, benchmark.ts
+├── benchmarks/             corpus.json + committed snapshot.json (see benchmarks/README.md)
 └── tests/                  Vitest suites + tests/fixtures/sample-app (a tiny synthetic repo)
 ```
 
@@ -67,7 +69,21 @@ Edges are stored at the **finest level** (file → file, file → integration/st
    - `detectEntryPoints` — hints + name patterns + content signals (`listen(`, `createRoot(`, `func main`, `if __name__`), excluding examples/docs/tests and comment lines.
    - `detectRoutes` — regex patterns per framework plus file-based routes.
    - `detectStorage` — ORM/driver dependencies, `schema.prisma`, migrations, compose services.
-3. **Imports** (`imports.ts`). `extractSpecifiers` per language, then resolve: JS/TS (relative, `tsconfig` `paths` scoped to the folder holding the tsconfig, `@/`/`~/` fallbacks, extension probing, `index` files), Python (relative dots; every suffix of the dotted path is registered so any project root works), Go (`go.mod` module prefix), Rust (`mod`, `crate::`), C# (namespace map). Unresolved non-relative specifiers become external package names, minus standard libraries.
+3. **Imports** (`parse.ts` + `imports.ts`). Each file is parsed with a tree-sitter grammar
+   (`parseFile`), giving exact specifiers plus the names they bind, whether the import is
+   type-only, and the `package` a JVM/C#/PHP file declares. Files with no grammar — and any
+   file that fails to parse, or a checkout with the optional grammars omitted — fall back to
+   the `extractSpecifiers` regexes, so results degrade instead of disappearing. Then resolve: JS/TS (relative, `tsconfig` `paths` scoped to the folder holding the tsconfig, `@/`/`~/` fallbacks, extension probing, `index` files), Python (relative dots; every suffix of the dotted path is registered so any project root works), Go (`go.mod` module prefix, multi-module repositories), Rust (`mod`, `crate::`, sibling crates in a
+   Cargo workspace), JVM and C# (through the package/namespace map built from the parse).
+   Bare specifiers are also matched against **workspace packages** — every `package.json`,
+   `go.mod` and `Cargo.toml` in the repository maps its declared name to its folder — so
+   `@acme/ui` links to `packages/ui` instead of looking external. Anything still unresolved
+   becomes an external package name, minus standard libraries.
+
+   The stage returns `ImportDiagnostics` alongside the imports: how many files were parsed
+   versus regex-scanned, and every specifier that pointed inside the repository yet failed to
+   resolve. Those failures are always analyzer gaps, which is what `npm run bench` measures.
+
 4. **Graph** (`graph.ts`).
    - `moduleKeyFor` groups files: root files split into code/config/docs; container folders (`src`, `lib`, `app`, `backend`, …) are looked through one level; monorepo packages (`apps/*`, `packages/*`, …) stay whole under `SPLIT_PACKAGE_THRESHOLD` code files and are split into sub-folders above it.
    - `classifyModule` assigns a `NodeType` from folder name, route density, JSX share and workspace position.
@@ -117,4 +133,4 @@ React Flow renders custom `tz`/`tzGroup` nodes. Fit-to-view is triggered on stru
 | Add a node type                                      | `NodeType` in `shared/types.ts`, colour/label/glyph in `nodeStyles.ts` and `GraphNodes.tsx`                                        |
 | Use a different LLM                                  | implement `SummaryProvider` in `summary.ts`                                                                                        |
 
-Every analyzer change should come with a case in `tests/analyzer.test.ts` (extend `tests/fixtures/sample-app` if needed) and a run of `npm run scan:local` against a real repository that exercises it.
+Every analyzer change should come with a case in `tests/analyzer.test.ts` or `tests/parse.test.ts`, and a `npm run bench -- --diff` run showing its effect on real repositories. It should also keep working with the optional grammars removed (`npm ci --omit=optional`), which CI checks.

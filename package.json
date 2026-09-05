@@ -1,6 +1,6 @@
 {
   "name": "reposcope",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Paste a repository, scan it, and immediately understand how the software is put together.",
   "private": true,
   "license": "MIT",
@@ -36,7 +36,8 @@
     "format:check": "prettier --check .",
     "demo:generate": "tsx scripts/generate-demo.ts",
     "scan:local": "tsx scripts/scan-local.ts",
-    "check": "npm run format:check && npm run typecheck && npm run test"
+    "check": "npm run format:check && npm run typecheck && npm run test",
+    "bench": "tsx scripts/benchmark.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.1.1",
@@ -46,6 +47,10 @@
     "react-dom": "^19.2.8",
     "simple-git": "^3.36.0",
     "zod": "^4.5.4"
+  },
+  "optionalDependencies": {
+    "web-tree-sitter": "^0.24.7",
+    "tree-sitter-wasms": "^0.1.13"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

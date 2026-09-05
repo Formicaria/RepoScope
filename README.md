@@ -100,18 +100,31 @@ Every stage is a pure function over the previous stage's output, so the parser, 
 
 ### Supported languages
 
-|                         | Import resolution | Notes                                                                                  |
-| ----------------------- | ----------------- | -------------------------------------------------------------------------------------- |
-| TypeScript / JavaScript | ✅                | relative paths, `tsconfig` `paths`, `@/` and `~/` conventions, monorepo-scoped aliases |
-| Python                  | ✅                | absolute and relative imports, any project root                                        |
-| Go                      | ✅                | module-local packages via `go.mod`                                                     |
-| Rust                    | ✅                | `mod` and `crate::` paths                                                              |
-| C#                      | ✅                | namespace-level `using`                                                                |
-| Ruby, PHP, Dart, C/C++  | partial           | relative requires / includes                                                           |
-| Java, Kotlin, Scala     | externals only    | internal packages are grouped by folder without edges                                  |
-| Everything else         | counted           | grouped by folder, no edges                                                            |
+| Language                | Import resolution | How                                                                                                          |
+| ----------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------ |
+| TypeScript / JavaScript | ✅                | relative paths, `tsconfig`/`jsconfig` `paths` (wildcards included), Vite aliases, `$lib`, workspace packages |
+| Python                  | ✅                | absolute, relative and `from . import module`, any project root                                              |
+| Go                      | ✅                | module-local packages, multi-module repositories                                                             |
+| Rust                    | ✅                | `mod`, `crate::`, and sibling crates in a Cargo workspace                                                    |
+| Java / Kotlin / Scala   | ✅                | resolved through the `package` each file declares                                                            |
+| C#                      | ✅                | namespace-level `using`                                                                                      |
+| Ruby, PHP, Dart, C/C++  | partial           | relative requires / includes, PHP namespaces                                                                 |
+| Everything else         | counted           | grouped by folder, no edges                                                                                  |
+
+Files are parsed with [tree-sitter](https://tree-sitter.github.io/) grammars, so multi-line import lists, `import type`, re-exports and dynamic imports are read correctly — and imports that only appear inside comments, strings or template literals are correctly _not_ read. The grammars are an optional dependency: install with `npm ci --omit=optional` (or let the install fail) and the analyzer falls back to regular expressions, with lower accuracy but no loss of function.
 
 Route detection covers Express/Koa/Fastify/Hono, FastAPI/Flask, Next.js/SvelteKit/Nuxt file routes, Go `net/http`/gin/echo/chi/fiber, ASP.NET attributes, Spring, Rails `routes.rb`, Laravel and axum/actix. Storage detection covers the common ORMs and drivers across ecosystems plus `docker-compose` services and Prisma schemas. Found a gap? Open a [detection gap issue](.github/ISSUE_TEMPLATE/detection_gap.md).
+
+### Accuracy
+
+Analyzer changes are judged against a corpus of ten real public repositories rather than by intuition:
+
+```bash
+npm run bench            # scan the corpus, write benchmarks/snapshot.json
+npm run bench -- --diff  # scan and print the delta against the committed snapshot
+```
+
+The headline metric is the **unresolved-local rate**: the share of import specifiers that unambiguously point inside the repository (relative paths, configured aliases, workspace packages) but could not be resolved to a file. Those are always analyzer gaps, which makes the number ground truth that needs no hand labelling. It currently sits at **0.6%** across the corpus, down from 3.4% on regular expressions alone. See [benchmarks/README.md](benchmarks/README.md).
 
 ### Optional LLM summary
 

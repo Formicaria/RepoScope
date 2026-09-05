@@ -141,6 +141,16 @@ export interface ScanStats {
   warnings: number
 }
 
+/** How much of the repository the analyzer actually understood. Useful for benchmarking. */
+export interface AnalysisDiagnostics {
+  parsedFiles: number
+  regexFiles: number
+  totalSpecifiers: number
+  resolvedInternal: number
+  external: number
+  unresolvedLocal: { from: string; raw: string }[]
+}
+
 export interface ScanResult {
   id: string
   repository: Repository
@@ -155,6 +165,8 @@ export interface ScanResult {
   warnings: Warning[]
   health: HealthScore
   stats: ScanStats
+  /** Optional: present for scans produced by this version of the analyzer. */
+  diagnostics?: AnalysisDiagnostics
 }
 
 export type ScanStage =

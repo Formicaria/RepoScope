@@ -13,6 +13,7 @@ import {
   detectStorage,
 } from '../server/analyzer/detect.js'
 import { analyzeImports, extractSpecifiers, stripJsonComments } from '../server/analyzer/imports.js'
+import { parsingAvailable } from '../server/analyzer/parse.js'
 import { buildGraph, moduleKeyFor } from '../server/analyzer/graph.js'
 import { findCycles } from '../server/analyzer/warnings.js'
 import { computeHealth } from '../server/analyzer/score.js'
@@ -101,7 +102,7 @@ describe('repository parsing', () => {
 
   it('resolves relative and aliased imports, and separates externals', async () => {
     const files = await readRepositoryFromDisk(FIXTURE)
-    const imports = analyzeImports(files)
+    const { imports } = await analyzeImports(files)
     const internal = imports.filter((i) => i.to).map((i) => `${i.from} -> ${i.to}`)
     expect(internal).toContain('src/server.ts -> src/routes/users.ts')
     expect(internal).toContain('src/services/userService.ts -> src/models/user.ts')
@@ -140,7 +141,7 @@ describe('graph generation', () => {
     const manifests = detectManifests(files)
     const graph = buildGraph({
       files,
-      imports: analyzeImports(files),
+      imports: (await analyzeImports(files)).imports,
       dependencies: manifests.dependencies,
       entryPoints: detectEntryPoints(files, manifests.entryHints),
       routes: detectRoutes(files),
@@ -253,5 +254,109 @@ describe('warnings and scoring', () => {
     expect(result.warnings.map((w) => w.kind)).toContain('unclear-entry')
     expect(result.nodes.length).toBeGreaterThan(0)
     expect(result.health.score).toBeGreaterThanOrEqual(0)
+  })
+})
+
+describe('import resolution', () => {
+  const f = (path: string, content = ''): RepoFile => ({ path, size: content.length, content })
+  const resolved = async (files: RepoFile[]) => {
+    const { imports } = await analyzeImports(files)
+    return imports.filter((i) => i.to).map((i) => `${i.from} -> ${i.to}`)
+  }
+
+  it('follows tsconfig path aliases with a wildcard in the middle of the target', async () => {
+    // The shape monorepos actually use: "@acme/*" -> "packages/*/src".
+    const files = [
+      f(
+        'tsconfig.json',
+        JSON.stringify({
+          compilerOptions: { paths: { '@acme/*': ['packages/*/src'], '@app/*': ['./src/*'] } },
+        }),
+      ),
+      f('packages/shared/src/index.ts', 'export const one = 1'),
+      f('src/util/format.ts', 'export const fmt = 1'),
+      f('src/app.ts', "import { one } from '@acme/shared'\nimport { fmt } from '@app/util/format'"),
+    ]
+    expect(await resolved(files)).toEqual([
+      'src/app.ts -> packages/shared/src/index.ts',
+      'src/app.ts -> src/util/format.ts',
+    ])
+  })
+
+  it('links an import of a workspace package to the package in this repository', async () => {
+    const files = [
+      f('package.json', JSON.stringify({ name: 'root', workspaces: ['packages/*'] })),
+      f('packages/ui/package.json', JSON.stringify({ name: '@acme/ui', main: 'src/index.ts' })),
+      f('packages/ui/src/index.ts', 'export const Button = 1'),
+      f('apps/web/package.json', JSON.stringify({ name: '@acme/web' })),
+      f('apps/web/src/page.ts', "import { Button } from '@acme/ui'"),
+    ]
+    expect(await resolved(files)).toEqual(['apps/web/src/page.ts -> packages/ui/src/index.ts'])
+  })
+
+  it("resolves SvelteKit's $lib alias", async () => {
+    const files = [
+      f('svelte.config.js', 'export default {}'),
+      f('src/lib/api.ts', 'export const get = 1'),
+      f('src/routes/+page.svelte', "<script>import { get } from '$lib/api'</script>"),
+    ]
+    expect(await resolved(files)).toEqual(['src/routes/+page.svelte -> src/lib/api.ts'])
+  })
+
+  it('resolves an import of the repository root', async () => {
+    const files = [
+      f('index.js', 'module.exports = 1'),
+      f('test/deep/case.js', "const app = require('../..')"),
+    ]
+    expect(await resolved(files)).toEqual(['test/deep/case.js -> index.js'])
+  })
+
+  it('resolves `from . import module` in Python', async () => {
+    const files = [
+      f('pkg/__init__.py', ''),
+      f('pkg/models.py', 'class User: pass'),
+      f('pkg/service.py', 'from . import models\nfrom .models import User'),
+    ]
+    const out = await resolved(files)
+    expect(out).toContain('pkg/service.py -> pkg/models.py')
+  })
+
+  it('resolves Java imports through declared packages', async () => {
+    const files = [
+      f(
+        'src/main/java/com/acme/domain/UserService.java',
+        'package com.acme.domain;\npublic class UserService {}',
+      ),
+      f(
+        'src/main/java/com/acme/api/UserController.java',
+        'package com.acme.api;\nimport com.acme.domain.UserService;\npublic class UserController {}',
+      ),
+    ]
+    expect(await resolved(files)).toEqual([
+      'src/main/java/com/acme/api/UserController.java -> src/main/java/com/acme/domain/UserService.java',
+    ])
+  })
+
+  it('reports specifiers that point inside the repository but do not resolve', async () => {
+    const files = [
+      f('src/a.ts', "import './definitely-missing'\nimport 'react'\nimport './logo.png'"),
+    ]
+    const { diagnostics } = await analyzeImports(files)
+    expect(diagnostics.unresolvedLocal.map((u) => u.raw)).toEqual(['./definitely-missing'])
+    // Assets are dropped by ingest, so they are not counted as analyzer gaps.
+    expect(diagnostics.external).toBe(1)
+  })
+
+  it('does not create edges for imports that only appear in comments or strings', async () => {
+    const files = [
+      f('src/real.ts', 'export const x = 1'),
+      f(
+        'src/main.ts',
+        "// import { x } from './real'\nconst snippet = `import { x } from './real'`\nexport const y = 2",
+      ),
+    ]
+    const out = await resolved(files)
+    // With a grammar loaded this is empty; the regex fallback would report a false edge.
+    if (parsingAvailable()) expect(out).toEqual([])
   })
 })

@@ -1,0 +1,496 @@
+{
+  "generatedAt": "2026-09-05T10:32:31.438Z",
+  "analyzer": "0.2.0",
+  "repos": [
+    {
+      "name": "express",
+      "commit": "023767fe98",
+      "files": 213,
+      "lines": 21616,
+      "modules": 6,
+      "moduleEdges": 6,
+      "fileEdges": 153,
+      "coverage": 1,
+      "specifiers": 400,
+      "resolvedInternal": 159,
+      "external": 154,
+      "unresolvedLocal": 0,
+      "unresolvedLocalRate": 0,
+      "entryPoints": [
+        "index.js"
+      ],
+      "frameworks": [
+        "GitHub Actions"
+      ],
+      "routes": 89,
+      "nodeTypes": {
+        "config": 2,
+        "docs": 2,
+        "api": 1,
+        "test": 1,
+        "entry": 1
+      },
+      "warningKinds": {
+        "excessive-complexity": 1
+      },
+      "health": 92,
+      "ms": 616,
+      "unresolvedSamples": []
+    },
+    {
+      "name": "realworld-express",
+      "commit": "30b68e1e88",
+      "files": 61,
+      "lines": 2403,
+      "modules": 8,
+      "moduleEdges": 11,
+      "fileEdges": 54,
+      "coverage": 1,
+      "specifiers": 71,
+      "resolvedInternal": 49,
+      "external": 22,
+      "unresolvedLocal": 0,
+      "unresolvedLocalRate": 0,
+      "entryPoints": [
+        "src/main.ts"
+      ],
+      "frameworks": [
+        "Express",
+        "Docker",
+        "Prisma",
+        "Jest",
+        "TypeScript"
+      ],
+      "routes": 19,
+      "nodeTypes": {
+        "module": 1,
+        "test": 2,
+        "database": 3,
+        "api": 1,
+        "config": 1,
+        "docs": 1,
+        "entry": 1,
+        "integration": 2
+      },
+      "warningKinds": {
+        "dead-module": 1,
+        "circular-dependency": 1
+      },
+      "health": 88,
+      "ms": 67,
+      "unresolvedSamples": []
+    },
+    {
+      "name": "fastapi-fullstack",
+      "commit": "cb740b656d",
+      "files": 229,
+      "lines": 14233,
+      "modules": 24,
+      "moduleEdges": 38,
+      "fileEdges": 407,
+      "coverage": 1,
+      "specifiers": 689,
+      "resolvedInternal": 377,
+      "external": 272,
+      "unresolvedLocal": 0,
+      "unresolvedLocalRate": 0,
+      "entryPoints": [
+        "backend/app/initial_data.py",
+        "backend/app/main.py",
+        "frontend/src/main.tsx"
+      ],
+      "frameworks": [
+        "FastAPI",
+        "React",
+        "Tailwind CSS",
+        "Vite",
+        "Docker",
+        "Docker Compose",
+        "GitHub Actions",
+        "TypeScript"
+      ],
+      "routes": 23,
+      "nodeTypes": {
+        "config": 9,
+        "module": 5,
+        "api": 2,
+        "service": 1,
+        "test": 2,
+        "component": 3,
+        "app": 1,
+        "docs": 1,
+        "entry": 3,
+        "database": 2,
+        "integration": 2
+      },
+      "warningKinds": {
+        "exposed-secret": 2,
+        "dead-module": 1,
+        "missing-tests": 4,
+        "unused-dependency": 1
+      },
+      "health": 53,
+      "ms": 3809,
+      "unresolvedSamples": []
+    },
+    {
+      "name": "linkwarden",
+      "commit": "789aa2b0ad",
+      "files": 668,
+      "lines": 57316,
+      "modules": 41,
+      "moduleEdges": 128,
+      "fileEdges": 1745,
+      "coverage": 1,
+      "specifiers": 2871,
+      "resolvedInternal": 1698,
+      "external": 1111,
+      "unresolvedLocal": 0,
+      "unresolvedLocalRate": 0,
+      "entryPoints": [
+        "apps/worker/index.ts",
+        "packages/filesystem/index.ts",
+        "packages/prisma/index.ts"
+      ],
+      "frameworks": [
+        "Expo",
+        "React",
+        "React Native",
+        "Tailwind CSS",
+        "Next.js",
+        "Docker",
+        "Docker Compose",
+        "Prisma",
+        "GitHub Actions",
+        "Vitest",
+        "Jest",
+        "TypeScript"
+      ],
+      "routes": 0,
+      "nodeTypes": {
+        "module": 6,
+        "config": 12,
+        "app": 10,
+        "component": 7,
+        "database": 5,
+        "test": 1,
+        "api": 1,
+        "service": 1,
+        "docs": 1,
+        "entry": 3,
+        "integration": 5
+      },
+      "warningKinds": {
+        "missing-tests": 9,
+        "excessive-complexity": 3,
+        "dead-module": 3,
+        "duplicate-functionality": 3,
+        "unused-dependency": 1
+      },
+      "health": 52,
+      "ms": 1076,
+      "unresolvedSamples": []
+    },
+    {
+      "name": "flask",
+      "commit": "d318b68347",
+      "files": 227,
+      "lines": 18425,
+      "modules": 8,
+      "moduleEdges": 10,
+      "fileEdges": 151,
+      "coverage": 1,
+      "specifiers": 680,
+      "resolvedInternal": 240,
+      "external": 256,
+      "unresolvedLocal": 0,
+      "unresolvedLocalRate": 0,
+      "entryPoints": [
+        "src/flask/__main__.py",
+        "src/flask/app.py",
+        "src/flask/cli.py"
+      ],
+      "frameworks": [
+        "Flask",
+        "pytest",
+        "GitHub Actions"
+      ],
+      "routes": 60,
+      "nodeTypes": {
+        "config": 3,
+        "docs": 3,
+        "module": 1,
+        "test": 1,
+        "entry": 3,
+        "database": 1,
+        "integration": 1
+      },
+      "warningKinds": {
+        "exposed-secret": 1,
+        "excessive-complexity": 2,
+        "circular-dependency": 3,
+        "unused-dependency": 1
+      },
+      "health": 59,
+      "ms": 267,
+      "unresolvedSamples": []
+    },
+    {
+      "name": "httpie-cli",
+      "commit": "5b604c37c6",
+      "files": 261,
+      "lines": 19262,
+      "modules": 8,
+      "moduleEdges": 13,
+      "fileEdges": 382,
+      "coverage": 1,
+      "specifiers": 866,
+      "resolvedInternal": 389,
+      "external": 140,
+      "unresolvedLocal": 0,
+      "unresolvedLocalRate": 0,
+      "entryPoints": [
+        "extras/profiling/benchmarks.py",
+        "extras/profiling/run.py",
+        "httpie/__main__.py",
+        "httpie/manager/__main__.py",
+        "httpie/manager/cli.py"
+      ],
+      "frameworks": [
+        "Docker",
+        "GitHub Actions"
+      ],
+      "routes": 10,
+      "nodeTypes": {
+        "module": 3,
+        "config": 2,
+        "docs": 2,
+        "test": 1,
+        "entry": 5
+      },
+      "warningKinds": {
+        "exposed-secret": 4,
+        "dead-module": 1,
+        "missing-tests": 1,
+        "circular-dependency": 3
+      },
+      "health": 54,
+      "ms": 510,
+      "unresolvedSamples": []
+    },
+    {
+      "name": "chi",
+      "commit": "ae6be74691",
+      "files": 102,
+      "lines": 12470,
+      "modules": 7,
+      "moduleEdges": 11,
+      "fileEdges": 55,
+      "coverage": 1,
+      "specifiers": 357,
+      "resolvedInternal": 55,
+      "external": 5,
+      "unresolvedLocal": 0,
+      "unresolvedLocalRate": 0,
+      "entryPoints": [
+        "_examples/custom-handler/main.go",
+        "_examples/custom-method/main.go",
+        "_examples/fileserver/main.go",
+        "_examples/graceful/main.go",
+        "_examples/hello-world/main.go",
+        "_examples/limits/main.go",
+        "_examples/logging/main.go",
+        "_examples/pathvalue/main.go",
+        "_examples/rest/main.go",
+        "_examples/router-walk/main.go",
+        "_examples/todos-resource/main.go",
+        "_examples/versions/main.go",
+        "middleware/sunset_test.go"
+      ],
+      "frameworks": [
+        "Chi",
+        "GitHub Actions"
+      ],
+      "routes": 116,
+      "nodeTypes": {
+        "module": 1,
+        "config": 3,
+        "api": 2,
+        "docs": 1,
+        "entry": 5
+      },
+      "warningKinds": {
+        "exposed-secret": 2,
+        "excessive-complexity": 1,
+        "unclear-entry": 1,
+        "missing-tests": 1,
+        "unused-dependency": 1
+      },
+      "health": 57,
+      "ms": 208,
+      "unresolvedSamples": []
+    },
+    {
+      "name": "ripgrep",
+      "commit": "3fce3b5bb0",
+      "files": 233,
+      "lines": 56533,
+      "modules": 13,
+      "moduleEdges": 1,
+      "fileEdges": 129,
+      "coverage": 1,
+      "specifiers": 466,
+      "resolvedInternal": 143,
+      "external": 60,
+      "unresolvedLocal": 3,
+      "unresolvedLocalRate": 0.021,
+      "entryPoints": [],
+      "frameworks": [
+        "GitHub Actions"
+      ],
+      "routes": 0,
+      "nodeTypes": {
+        "module": 4,
+        "config": 7,
+        "test": 1,
+        "docs": 1
+      },
+      "warningKinds": {
+        "unclear-entry": 1,
+        "excessive-complexity": 12,
+        "dead-module": 2,
+        "unused-dependency": 1
+      },
+      "health": 73,
+      "ms": 724,
+      "unresolvedSamples": [
+        "mod:imp",
+        "mod:index"
+      ]
+    },
+    {
+      "name": "vue-core",
+      "commit": "d105e19e91",
+      "files": 654,
+      "lines": 160108,
+      "modules": 59,
+      "moduleEdges": 168,
+      "fileEdges": 1801,
+      "coverage": 0.992,
+      "specifiers": 2148,
+      "resolvedInternal": 1883,
+      "external": 138,
+      "unresolvedLocal": 27,
+      "unresolvedLocalRate": 0.014,
+      "entryPoints": [
+        "packages-private/dts-test/defineComponent.test-d.tsx",
+        "packages-private/vite-debug/main.ts",
+        "packages/compiler-core/index.js",
+        "packages/compiler-core/src/index.ts",
+        "packages/compiler-dom/index.js",
+        "packages/compiler-dom/src/index.ts",
+        "packages/compiler-sfc/src/index.ts",
+        "packages/compiler-ssr/src/index.ts",
+        "packages/reactivity/index.js",
+        "packages/reactivity/src/index.ts",
+        "packages/runtime-core/index.js",
+        "packages/runtime-core/src/index.ts",
+        "packages/runtime-dom/index.js",
+        "packages/runtime-dom/src/index.ts",
+        "packages/runtime-test/index.js",
+        "packages/runtime-test/src/index.ts",
+        "packages/server-renderer/index.js",
+        "packages/server-renderer/src/index.ts",
+        "packages/shared/index.js",
+        "packages/shared/src/index.ts",
+        "packages/vue-compat/index.js",
+        "packages/vue-compat/src/index.ts",
+        "packages/vue/compiler-sfc/index.js",
+        "packages/vue/compiler-sfc/index.mjs",
+        "packages/vue/index.js",
+        "packages/vue/index.mjs",
+        "packages/vue/jsx-runtime/index.js",
+        "packages/vue/jsx-runtime/index.mjs",
+        "packages/vue/server-renderer/index.js",
+        "packages/vue/server-renderer/index.mjs",
+        "packages/vue/src/index.ts",
+        "scripts/dev.js"
+      ],
+      "frameworks": [
+        "Vite",
+        "Vue",
+        "GitHub Actions",
+        "Vitest",
+        "TypeScript"
+      ],
+      "routes": 1,
+      "nodeTypes": {
+        "module": 16,
+        "config": 11,
+        "test": 9,
+        "app": 17,
+        "component": 4,
+        "docs": 2,
+        "entry": 5
+      },
+      "warningKinds": {
+        "excessive-complexity": 24,
+        "dead-module": 2,
+        "circular-dependency": 8,
+        "unclear-entry": 1,
+        "missing-tests": 4,
+        "duplicate-functionality": 3,
+        "unused-dependency": 1
+      },
+      "health": 53,
+      "ms": 2147,
+      "unresolvedSamples": [
+        "@vue/consolidate",
+        "./utils",
+        "@vue/repl",
+        "@vue/repl/monaco-editor",
+        "./App.vue",
+        "@vue/consolidate/package.json",
+        "../packages/${f}/package.json"
+      ]
+    },
+    {
+      "name": "svelte-realworld",
+      "commit": "df79670804",
+      "files": 57,
+      "lines": 1388,
+      "modules": 8,
+      "moduleEdges": 2,
+      "fileEdges": 32,
+      "coverage": 0.462,
+      "specifiers": 67,
+      "resolvedInternal": 32,
+      "external": 35,
+      "unresolvedLocal": 0,
+      "unresolvedLocalRate": 0,
+      "entryPoints": [],
+      "frameworks": [
+        "SvelteKit",
+        "Svelte",
+        "Vite",
+        "TypeScript"
+      ],
+      "routes": 18,
+      "nodeTypes": {
+        "module": 3,
+        "component": 1,
+        "api": 1,
+        "config": 2,
+        "docs": 1
+      },
+      "warningKinds": {
+        "missing-tests": 1,
+        "unclear-entry": 1,
+        "dead-module": 2
+      },
+      "health": 56,
+      "ms": 21,
+      "unresolvedSamples": []
+    }
+  ]
+}

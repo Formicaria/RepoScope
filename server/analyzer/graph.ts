@@ -560,11 +560,13 @@ export function buildGraph(input: GraphInput): GraphOutput {
       const isTest =
         testModules.has(fileModule.get(im.from) ?? '') ||
         /\.(test|spec)\.\w+$|_test\.\w+$/.test(im.from)
-      pushEdge(s, t, isTest ? 'tests' : 'imports', 0.9)
+      // Type-only imports are real coupling but disappear at runtime, so they carry
+      // less confidence than a value import.
+      pushEdge(s, t, isTest ? 'tests' : 'imports', im.typeOnly ? 0.6 : 0.95)
     } else if (im.external) {
       const t = externalNodeId.get(im.external)
       if (!t) continue
-      pushEdge(s, t, t.startsWith('store:') ? 'dataflow' : 'depends', 0.8)
+      pushEdge(s, t, t.startsWith('store:') ? 'dataflow' : 'depends', im.typeOnly ? 0.5 : 0.85)
     }
   }
   // ORM / query-builder layers read and write the concrete database that was detected.
