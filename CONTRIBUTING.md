@@ -23,8 +23,16 @@ npm run bench -- --only flask,chi           # just two of them, while iterating
 ```
 
 The tree-sitter grammars are optional dependencies. The analyzer must keep working without
-them, so check your change against the regex fallback too — `REPOSCOPE_NO_PARSE=1 npm test`,
-which is what the `fallback` CI job runs.
+them, so check your change against the regex fallback too:
+
+```bash
+REPOSCOPE_NO_PARSE=1 npm test               # force the fallback path
+rm -rf node_modules/web-tree-sitter node_modules/tree-sitter-wasms && npm test
+```
+
+The second form is what the `fallback` CI job runs, because it exercises the real
+module-not-found path. Do not use `npm ci --omit=optional` for this — it also removes the
+native bindings that vite and vitest need to start.
 
 ## What makes a good pull request
 

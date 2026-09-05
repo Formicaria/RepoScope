@@ -19,7 +19,7 @@ Accuracy release. The unresolved-local rate across the benchmark corpus fell fro
 - Python `from . import module` and `from pkg import submodule` resolve to the module they name.
 - `npm run bench` benchmark harness over a ten-repository corpus, with a committed snapshot, a `--diff` mode and a weekly CI workflow.
 - Import diagnostics on every scan (`ScanResult.diagnostics`): files parsed versus regex-scanned, and every specifier that pointed inside the repository but failed to resolve.
-- CI job that runs the suite with the optional grammars removed.
+- CI job that runs the suite with the optional grammars removed, so the regex fallback cannot rot.
 
 ### Fixed
 

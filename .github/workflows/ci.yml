@@ -10,8 +10,8 @@ jobs:
     name: Format, typecheck, test, build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -25,11 +25,15 @@ jobs:
     name: Analyzer without optional parsers
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-      # The tree-sitter grammars are optional: the analyzer must still work on regexes alone.
-      - run: npm ci --omit=optional
+      - run: npm ci
+      # The tree-sitter grammars are optional and the analyzer must still work on regexes
+      # alone. Only those two packages are removed: `npm ci --omit=optional` would also
+      # strip the native bindings that vitest and vite need to run at all.
+      - name: Remove the optional grammars
+        run: rm -rf node_modules/web-tree-sitter node_modules/tree-sitter-wasms
       - run: npm test

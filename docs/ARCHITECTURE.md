@@ -133,4 +133,4 @@ React Flow renders custom `tz`/`tzGroup` nodes. Fit-to-view is triggered on stru
 | Add a node type                                      | `NodeType` in `shared/types.ts`, colour/label/glyph in `nodeStyles.ts` and `GraphNodes.tsx`                                        |
 | Use a different LLM                                  | implement `SummaryProvider` in `summary.ts`                                                                                        |
 
-Every analyzer change should come with a case in `tests/analyzer.test.ts` or `tests/parse.test.ts`, and a `npm run bench -- --diff` run showing its effect on real repositories. It should also keep working with the optional grammars removed (`npm ci --omit=optional`), which CI checks.
+Every analyzer change should come with a case in `tests/analyzer.test.ts` or `tests/parse.test.ts`, and a `npm run bench -- --diff` run showing its effect on real repositories. It should also keep working with the optional grammars removed (delete `node_modules/web-tree-sitter` and `node_modules/tree-sitter-wasms`, or set `REPOSCOPE_NO_PARSE=1`), which CI checks.

@@ -3,3 +3,4 @@ dist
 .tmp
 src/data/demo.json
 tests/fixtures
+benchmarks/snapshot.json
