@@ -44,6 +44,40 @@ export interface ReviewContext {
   hasDependency(name: string): boolean
   /** Line text at a 1-based line number, trimmed and length-capped. */
   excerpt(path: string, line: number): string | undefined
+  /**
+   * True when a 1-based line sits inside a test block written in the same file as the code
+   * it tests — `#[cfg(test)] mod tests` in Rust above all, which is the idiomatic place to
+   * put them. Excluding whole test *files* is not enough for those languages, and a rule
+   * that lectures a Rust crate about the duplication in its own test fixtures is noise.
+   */
+  inTestBlock(path: string, line: number): boolean
+}
+
+/** Line ranges (1-based, inclusive) of test blocks embedded in a source file. */
+export function testBlockRanges(file: RepoFile): [number, number][] {
+  const text = file.content
+  if (!text || !/#\[cfg\(test\)\]|#\[test\]/.test(text)) return []
+  const lines = text.split('\n')
+  const ranges: [number, number][] = []
+  for (let i = 0; i < lines.length; i++) {
+    if (!/^\s*#\[(cfg\(test\)|test)\]/.test(lines[i])) continue
+    // Walk to the opening brace of the item the attribute is attached to, then brace-match.
+    let depth = 0
+    let started = false
+    let j = i
+    for (; j < lines.length; j++) {
+      for (const ch of lines[j]) {
+        if (ch === '{') {
+          depth++
+          started = true
+        } else if (ch === '}') depth--
+      }
+      if (started && depth <= 0) break
+    }
+    ranges.push([i + 1, Math.min(j, lines.length - 1) + 1])
+    i = j
+  }
+  return ranges
 }
 
 export interface RuleResult {

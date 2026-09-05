@@ -98,7 +98,13 @@ Edges are stored at the **finest level** (file → file, file → integration/st
    the review. The context distinguishes an application from a library (`isApplication`, from
    root-level manifests) and excludes tests, examples, docs and generated files, because most
    false positives come from judging code by standards that do not apply to it. Excerpts are
-   redacted before they leave the analyzer.
+   redacted before they leave the analyzer — `redact()` in `review/index.ts` is the single
+   choke point every excerpt passes through, and it is deliberately biased towards redacting
+   too much: it splits identifiers on case and punctuation so `JWT_SECRET` reads as a secret,
+   and recognises the common key formats wherever they appear. `review/config.ts` reads
+   `.reposcope.json` from the scanned repository, which can disable rules, ignore paths and
+   override severities; a malformed config is reported through `ReviewSummary.configured`
+   rather than obeyed, and the presence of a config is always surfaced in the UI.
 7. **Score** (`score.ts`). Start at 100, apply deltas per signal, clamp, label. The breakdown is part of the result so the UI can show it.
 8. **Summary** (`summary.ts`). `buildTemplateSummary` writes the prose from facts; `SummaryProvider.summarize(draft, facts)` may rewrite `headline`/`description`/`architecture`. `providerFromEnv` returns the template provider unless `REPOSCOPE_LLM_URL` and `REPOSCOPE_LLM_MODEL` are set.
 

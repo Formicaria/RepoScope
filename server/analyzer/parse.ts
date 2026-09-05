@@ -608,17 +608,35 @@ const EXTRACTORS: Record<string, (root: AnyNode) => ParsedFile> = {
 /* Structure extraction                                                */
 /* ------------------------------------------------------------------ */
 
-/** Node types that introduce a function scope, per grammar family. */
+/**
+ * Node types that introduce a function scope.
+ *
+ * Every grammar names these differently, and a missing name means the structural rules
+ * silently do nothing for that language — which is worse than not supporting it, because
+ * the review then reports a clean result. `tests/parse.test.ts` locks the whole matrix down.
+ */
 const FUNCTION_NODES = new Set([
+  // ECMAScript
   'function_declaration',
-  'function_definition',
   'function_expression',
   'function',
   'arrow_function',
   'method_definition',
-  'method_declaration',
   'generator_function_declaration',
+  // Python
+  'function_definition',
+  // Rust
+  'function_item',
+  // C#, Java, Kotlin, Scala
+  'method_declaration',
   'constructor_declaration',
+  'local_function_statement',
+  'function_declaration_statement',
+  // Ruby
+  'method',
+  'singleton_method',
+  // PHP
+  'function_definition_statement',
 ])
 
 /** Node types that add a level of nesting worth counting. */
@@ -639,8 +657,18 @@ const NESTING_NODES = new Set([
   'elif_clause',
 ])
 
-const CATCH_NODES = new Set(['catch_clause', 'except_clause', 'rescue'])
-const CALL_NODES = new Set(['call_expression', 'call', 'new_expression', 'method_invocation'])
+const CATCH_NODES = new Set(['catch_clause', 'except_clause', 'rescue', 'catch_block'])
+const CALL_NODES = new Set([
+  'call_expression', // TypeScript, JavaScript, Rust, Go, C++
+  'call', // Python, Ruby
+  'new_expression',
+  'method_invocation', // Java
+  'invocation_expression', // C#
+  'object_creation_expression', // C#, PHP
+  'function_call_expression', // PHP
+  'member_call_expression', // PHP
+  'scoped_call_expression', // PHP
+])
 const STRING_NODES = new Set([
   'string',
   'string_literal',
@@ -648,12 +676,56 @@ const STRING_NODES = new Set([
   'interpreted_string_literal',
 ])
 
+/** Identifier-ish node types, used when a grammar exposes no `name` field. */
+const IDENTIFIER_NODES = new Set([
+  'identifier',
+  'simple_identifier',
+  'property_identifier',
+  'field_identifier',
+  'type_identifier',
+  'constant',
+  'name',
+])
+
 function nodeName(n: AnyNode): string {
+  const named = n.childForFieldName('name')
+  if (named) return named.text
+  // Kotlin and Ruby expose the name as a plain identifier child rather than a field.
+  for (let i = 0; i < n.namedChildCount; i++) {
+    const c = n.namedChild(i)
+    if (c && IDENTIFIER_NODES.has(c.type)) return c.text
+  }
+  return 'anonymous'
+}
+
+/**
+ * The callee as a reader would write it: `eval`, `db.query`, `Command::new`.
+ *
+ * Grammars disagree about which field holds it — `function` in most, `method` in Ruby,
+ * `name` plus `object` in Java and PHP — so each is tried in turn.
+ */
+function calleeName(n: AnyNode): string | undefined {
+  const direct =
+    n.childForFieldName('function') ??
+    n.childForFieldName('method') ??
+    n.childForFieldName('constructor') ??
+    n.childForFieldName('type')
+  if (direct) return direct.text
+
+  // Java `method_invocation`, PHP `member_call_expression`: object + name.
   const name = n.childForFieldName('name')
-  if (name) return name.text
-  // `const handler = () => {}` / `foo: function () {}`
-  const parentText = n.text.slice(0, 60)
-  return parentText.startsWith('function') ? 'anonymous' : 'anonymous'
+  if (name) {
+    const receiver = n.childForFieldName('object') ?? n.childForFieldName('receiver')
+    return receiver ? `${receiver.text}.${name.text}` : name.text
+  }
+  const receiverOnly = n.childForFieldName('receiver')
+  if (receiverOnly) return receiverOnly.text
+
+  // Kotlin exposes no callee field: the first child of a call expression is the callee,
+  // and the argument list follows it.
+  const first = n.namedChild(0)
+  if (first && first.type !== 'call_suffix' && first.type !== 'value_arguments') return first.text
+  return undefined
 }
 
 function countParams(n: AnyNode): number {
@@ -763,11 +835,15 @@ function extractStructure(root: AnyNode, source: string, grammar: string): FileS
     }
 
     if (CALL_NODES.has(n.type)) {
-      const fn = n.childForFieldName('function') ?? n.childForFieldName('constructor')
-      const args = n.childForFieldName('arguments')
-      if (fn) {
+      const callee = calleeName(n)
+      const args =
+        n.childForFieldName('arguments') ??
+        n.childForFieldName('argument_list') ??
+        n.childForFieldName('value_arguments') ??
+        n.descendantsOfType(['value_arguments', 'arguments', 'argument_list'])[0]
+      if (callee) {
         structure.calls.push({
-          name: fn.text.replace(/\s+/g, '').slice(0, 80),
+          name: callee.replace(/\s+/g, '').slice(0, 80),
           line: line(n),
           args: (args?.text ?? '').replace(/\s+/g, ' ').slice(0, 400),
         })

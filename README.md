@@ -69,17 +69,17 @@ npm start
 
 ## Commands
 
-| Command                                 | What it does                                                      |
-| --------------------------------------- | ----------------------------------------------------------------- |
-| `npm run dev`                           | API (`:8787`) + web app (`:5173`) with hot reload                 |
-| `npm run build`                         | Build the client into `dist/`                                     |
-| `npm start`                             | Serve `dist/` and the API on `PORT` (default 8787)                |
-| `npm run check`                         | Prettier check + TypeScript + tests — what CI runs                |
-| `npm test`                              | Vitest suite                                                      |
-| `npm run typecheck`                     | `tsc` for client and server                                       |
-| `npm run format`                        | Prettier write                                                    |
-| `npm run scan:local -- ./some/repo`     | Analyse a folder from the terminal (`--json` for the full result) |
-| `npm run demo:generate -- <github url>` | Regenerate `src/data/demo.json` from a real repository            |
+| Command                                 | What it does                                                                      |
+| --------------------------------------- | --------------------------------------------------------------------------------- |
+| `npm run dev`                           | API (`:8787`) + web app (`:5173`) with hot reload                                 |
+| `npm run build`                         | Build the client into `dist/`                                                     |
+| `npm start`                             | Serve `dist/` and the API on `PORT` (default 8787)                                |
+| `npm run check`                         | Prettier check + TypeScript + tests — what CI runs                                |
+| `npm test`                              | Vitest suite                                                                      |
+| `npm run typecheck`                     | `tsc` for client and server                                                       |
+| `npm run format`                        | Prettier write                                                                    |
+| `npm run scan:local -- ./some/repo`     | Analyse a folder from the terminal (`--json`, `--review`, `--fail-on=<severity>`) |
+| `npm run demo:generate -- <github url>` | Regenerate `src/data/demo.json` from a real repository                            |
 
 ## How it works
 
@@ -138,6 +138,36 @@ Three things keep the list worth reading:
 - **Every finding cites a file and a line**, with the surrounding source redacted of anything that looks like a credential. A suggestion you cannot check is one you learn to skim past.
 - **Each says what to change**, concretely enough to act on — "pass values as parameters: `db.query("… = $1", [id])`", not "consider security best practices".
 - **Context decides severity.** Application-only rules do not fire on libraries; an injection sink in a compiler is reported at lower confidence than the same line in a request handler; examples, docs, generated code and test fixtures are excluded, because an example is _supposed_ to print to the console.
+
+### Running the review in CI
+
+`scan:local` can gate a build. It exits `1` when anything at or above the given severity is found, and prints exactly which findings failed and where:
+
+```bash
+npm run scan:local -- . --review --fail-on=high
+npm run scan:local -- . --review --category=security --fail-on=critical
+npm run scan:local -- . --json > review.json
+```
+
+### Tuning it: `.reposcope.json`
+
+A rule that disagrees with a deliberate choice should be switched off by the people who made that choice, in a file they review like any other — otherwise the first false positive becomes permanent noise, and a list with permanent noise in it stops being read.
+
+```json
+{
+  "review": {
+    "disable": ["craft/narrating-comments"],
+    "ignore": ["legacy/**", "src/generated"],
+    "severity": { "security/permissive-cors": "low" }
+  }
+}
+```
+
+- `disable` — rule ids to switch off; `severity: "off"` does the same thing.
+- `ignore` — path patterns (`*` within a segment, `**` across them). A pattern with no wildcard covers the directory and everything beneath it, so `"legacy"` is enough.
+- `severity` — override a rule's severity, which is how you keep a finding visible without failing the build on it.
+
+A malformed config is reported, not obeyed: the problem appears in the review panel and the CLI output, and the review still runs. Whenever a config is present the UI says so, along with how much was switched off — a clean list should never be ambiguous about why it is clean.
 
 It is static analysis over heuristics: it does not run the code, does not know what the product is meant to do, and will sometimes be wrong. That is why each finding carries a confidence and its evidence. It is a first reviewer, not a substitute for one — and not a substitute for a real SAST tool on code that handles money or personal data.
 

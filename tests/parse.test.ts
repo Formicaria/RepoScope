@@ -166,3 +166,112 @@ describe('alias patterns', () => {
     expect(matchAlias('parts/*.vue', 'parts/Button.vue')).toBe('Button')
   })
 })
+
+/**
+ * A grammar whose node names RepoScope does not know extracts nothing, and the review then
+ * reports a clean result for that language — worse than declining to support it. This matrix
+ * asserts that every language the parser claims actually yields the facts the rules read.
+ */
+describe('structural extraction across languages', () => {
+  const SAMPLES: { path: string; source: string; expectCatch: boolean }[] = [
+    {
+      path: 'a.ts',
+      source:
+        'export function go(a: string, b: string) {\n  try {\n    db.query("x")\n  } catch (e) {}\n}',
+      expectCatch: true,
+    },
+    {
+      path: 'a.tsx',
+      source:
+        'export function Go() {\n  try {\n    db.query("x")\n  } catch (e) {}\n  return <div />\n}',
+      expectCatch: true,
+    },
+    {
+      path: 'a.py',
+      source:
+        'def go(a, b):\n    """Doc."""\n    try:\n        db.execute("x")\n    except Exception:\n        pass',
+      expectCatch: true,
+    },
+    {
+      path: 'a.go',
+      source: 'package m\n\nfunc Go(a string) {\n\tdb.Query("x")\n}',
+      expectCatch: false,
+    },
+    { path: 'a.rs', source: 'pub fn go(a: &str) {\n    db.query("x");\n}', expectCatch: false },
+    {
+      path: 'a.cs',
+      source:
+        'class C {\n  public void Go(int a) {\n    try { db.Query("x"); } catch (Exception e) {}\n  }\n}',
+      expectCatch: true,
+    },
+    {
+      path: 'a.java',
+      source:
+        'class C {\n  public void go(int a) {\n    try { db.query("x"); } catch (Exception e) {}\n  }\n}',
+      expectCatch: true,
+    },
+    {
+      path: 'a.kt',
+      source: 'fun go(a: Int) {\n  try { db.query("x") } catch (e: Exception) {}\n}',
+      expectCatch: true,
+    },
+    { path: 'a.rb', source: 'def go(a)\n  db.query("x")\nrescue => e\nend', expectCatch: true },
+    {
+      path: 'a.php',
+      source: '<?php\nfunction go($a) {\n  try { $db->query("x"); } catch (Exception $e) {}\n}',
+      expectCatch: true,
+    },
+  ]
+
+  for (const sample of SAMPLES) {
+    it(`extracts functions and call sites from ${sample.path}`, async () => {
+      const parsed = await parseFile(file(sample.path, sample.source), { structure: true })
+      if (!parsed) {
+        expect(parsingAvailable()).toBe(false)
+        return
+      }
+      const s = parsed.structure
+      expect(s).toBeDefined()
+      // Without these, the oversized-function and injection rules do nothing for this language.
+      expect(s!.functions.length, 'functions').toBeGreaterThan(0)
+      expect(s!.functions[0].name).toMatch(/^[Gg]o$/)
+      expect(s!.calls.length, 'call sites').toBeGreaterThan(0)
+      expect(s!.calls.some((c) => /query|execute/i.test(c.name))).toBe(true)
+      if (sample.expectCatch) expect(s!.catches.length, 'catch blocks').toBeGreaterThan(0)
+    })
+  }
+
+  it('measures function size, parameters and nesting', async () => {
+    const parsed = await parseFile(
+      file(
+        'deep.ts',
+        'export function go(a: number, b: number, c: number) {\n' +
+          '  if (a) {\n    if (b) {\n      for (const x of []) {\n        while (c) {\n          work()\n        }\n      }\n    }\n  }\n}',
+      ),
+      { structure: true },
+    )
+    if (!parsed?.structure) return
+    const fn = parsed.structure.functions[0]
+    expect(fn.params).toBe(3)
+    expect(fn.lines).toBe(11)
+    expect(fn.maxNesting).toBeGreaterThanOrEqual(4)
+  })
+
+  it('tells an empty catch from one that rethrows', async () => {
+    const parsed = await parseFile(
+      file(
+        'c.ts',
+        'function a() { try { x() } catch (e) {} }\n' +
+          'function b() { try { x() } catch (e) { console.error(e) } }\n' +
+          'function c() { try { x() } catch (e) { logger.warn(e); throw e } }',
+      ),
+      { structure: true },
+    )
+    if (!parsed?.structure) return
+    const [empty, logs, rethrows] = parsed.structure.catches
+    expect(empty.isEmpty).toBe(true)
+    expect(logs.isEmpty).toBe(false)
+    expect(logs.swallows).toBe(true)
+    expect(rethrows.swallows).toBe(false)
+  })
+})

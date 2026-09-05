@@ -6,6 +6,42 @@ All notable changes to RepoScope are documented here. The format follows [Keep a
 
 See [ROADMAP.md](ROADMAP.md) for what is planned next.
 
+## [0.5.0] — 2026-09-05
+
+### Fixed
+
+- **Security: the review could print a credential it was meant to redact.** The guard that
+  decided whether a line held a secret matched `\bsecret\b`, which never matches `JWT_SECRET`
+  — `_` is a word character, so there is no boundary before `SECRET`. Lines such as
+  `jwt.sign(payload, process.env.JWT_SECRET || 'superSecret')` and
+  `const AWS_SECRET_ACCESS_KEY = 'AKIA…'` therefore showed their fallback values verbatim in
+  the finding evidence, and in anything exported from it. Redaction now splits identifiers on
+  case and punctuation before looking for credential words, recognises the common key formats
+  (AWS, GitHub, OpenAI, Slack, Google, JWT) wherever they appear, and strips passwords out of
+  connection URLs. The exact lines that leaked are now test fixtures. **Anyone who scanned a
+  repository with 0.4.0 should treat the resulting exports and share links as containing
+  those values.**
+- Structural extraction was silently empty for five languages: C#, Java, Kotlin, Ruby and PHP
+  produced no call sites, and Rust and Ruby no functions, so most review rules never fired on
+  them. Fixed, with a language matrix test so it cannot regress unnoticed.
+- Interpolation detection only understood JavaScript and Python syntax, so C# `$"…"`, Ruby
+  `#{}`, Go `Sprintf` and Java `String.format` were invisible to the injection rules. SQL
+  built in one statement and executed in the next is now caught too, as are `QueryAsync`-style
+  method names and secret fallbacks written as `(process.env.X ?? 'literal')`.
+- Python and Ruby docstrings were not recognised as documentation, so idiomatic code was
+  reported as having hundreds of undocumented exports.
+- Dependencies declared only by an example or a sub-package no longer count as the project's
+  own.
+
+### Added
+
+- **`.reposcope.json`**, a repository-owned config for the review: `disable`, `ignore` path
+  patterns, and per-rule `severity` overrides. A malformed config is reported rather than
+  obeyed, and whenever one is present the UI and CLI say the review was tuned and by how much,
+  so a clean list is never ambiguous about why it is clean.
+- `scan:local` gained `--review`, `--category=<c>` and `--fail-on=<severity>`, which exits `1`
+  when anything at or above that severity is found — enough to gate a build.
+
 ## [0.4.0] — 2026-09-05
 
 RepoScope now reviews the code as well as mapping it.

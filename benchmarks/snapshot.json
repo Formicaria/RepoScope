@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-05T12:54:43.121Z",
-  "analyzer": "0.4.0",
+  "generatedAt": "2026-09-05T18:27:27.910Z",
+  "analyzer": "0.5.0",
   "repos": [
     {
       "name": "express",
@@ -39,7 +39,7 @@
       "suggestionRules": [
         "craft/narrating-comments"
       ],
-      "ms": 739,
+      "ms": 949,
       "unresolvedSamples": []
     },
     {
@@ -92,7 +92,7 @@
         "security/secret-default-value",
         "testing/no-continuous-integration"
       ],
-      "ms": 104,
+      "ms": 139,
       "unresolvedSamples": []
     },
     {
@@ -153,7 +153,7 @@
         "documentation/thin-readme",
         "reliability/no-error-boundary"
       ],
-      "ms": 3317,
+      "ms": 4260,
       "unresolvedSamples": []
     },
     {
@@ -233,7 +233,7 @@
         "reliability/no-error-boundary",
         "security/xss-sink"
       ],
-      "ms": 1411,
+      "ms": 1963,
       "unresolvedSamples": []
     },
     {
@@ -276,15 +276,14 @@
         "unused-dependency": 1
       },
       "health": 77,
-      "suggestions": 4,
+      "suggestions": 3,
       "suggestionsHigh": 0,
       "suggestionRules": [
-        "craft/commented-out-code",
         "craft/long-parameter-lists",
         "craft/oversized-functions",
         "security/dynamic-code-execution"
       ],
-      "ms": 376,
+      "ms": 569,
       "unresolvedSamples": []
     },
     {
@@ -331,7 +330,7 @@
         "craft/oversized-functions",
         "security/tls-verification-disabled"
       ],
-      "ms": 437,
+      "ms": 719,
       "unresolvedSamples": []
     },
     {
@@ -375,7 +374,7 @@
         "craft/oversized-functions",
         "maintainability/no-linter"
       ],
-      "ms": 288,
+      "ms": 406,
       "unresolvedSamples": []
     },
     {
@@ -419,15 +418,16 @@
         "missing-tests": 9,
         "unused-dependency": 1
       },
-      "health": 73,
-      "suggestions": 3,
+      "health": 71,
+      "suggestions": 4,
       "suggestionsHigh": 0,
       "suggestionRules": [
-        "craft/commented-out-code",
         "craft/duplicated-blocks",
-        "craft/leftover-scaffolding"
+        "craft/leftover-scaffolding",
+        "craft/long-parameter-lists",
+        "craft/oversized-functions"
       ],
-      "ms": 1220,
+      "ms": 2112,
       "unresolvedSamples": [
         "mod:imp",
         "mod:index"
@@ -498,7 +498,7 @@
         "security/dynamic-code-execution",
         "security/xss-sink"
       ],
-      "ms": 3384,
+      "ms": 4771,
       "unresolvedSamples": [
         "@vue/consolidate",
         "./utils",
@@ -546,13 +546,12 @@
         "dead-module": 1
       },
       "health": 64,
-      "suggestions": 2,
+      "suggestions": 1,
       "suggestionsHigh": 0,
       "suggestionRules": [
-        "craft/commented-out-code",
         "testing/no-continuous-integration"
       ],
-      "ms": 41,
+      "ms": 46,
       "unresolvedSamples": []
     }
   ]

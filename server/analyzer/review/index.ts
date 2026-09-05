@@ -5,13 +5,14 @@ import type {
   Suggestion,
   SuggestionSeverity,
 } from '../../../shared/types.js'
-import type { ParsedFile } from '../parse.js'
+import type { FileStructure, ParsedFile } from '../parse.js'
 import type { GraphOutput } from '../graph.js'
 import type { RouteInfo } from '../detect.js'
 import {
   NON_SOURCE,
   NOT_PRODUCT_CODE,
   TEST_FILE,
+  testBlockRanges,
   type ReviewContext,
   type Rule,
   type RuleResult,
@@ -20,8 +21,16 @@ import { CODE_LANGUAGES, languageOf } from '../detect.js'
 import { securityRules } from './security.js'
 import { craftRules } from './craft.js'
 import { productRules } from './product.js'
+import {
+  EMPTY_CONFIG,
+  isDisabled,
+  isIgnored,
+  loadReviewConfig,
+  type ReviewConfig,
+} from './config.js'
 
 export { type Rule, type ReviewContext } from './context.js'
+export { loadReviewConfig, matchesPattern, CONFIG_FILENAME, type ReviewConfig } from './config.js'
 
 /**
  * The review pass: everything the analyzer can say about how the code is written, as
@@ -58,22 +67,52 @@ export interface ReviewInput {
   /** Dependencies declared at the repository root; see ManifestInfo. */
   rootDependencies?: Set<string>
   rules?: Rule[]
+  /** Repository-owned overrides; read from `.reposcope.json` when not supplied. */
+  config?: ReviewConfig
+}
+
+/**
+ * Drop everything the parser found inside an in-file test block, so the structural rules see
+ * only shipped code. Rust puts its tests in `#[cfg(test)] mod tests` next to the code they
+ * cover; excluding test *files* alone would leave a crate being told off for the duplication
+ * in its own fixtures.
+ */
+function withoutTestBlocks(structure: FileStructure, ranges: [number, number][]): FileStructure {
+  if (!ranges.length) return structure
+  const inside = (line: number) => ranges.some(([start, end]) => line >= start && line <= end)
+  const keep = <T extends { line: number }>(items: T[]) => items.filter((i) => !inside(i.line))
+  return {
+    ...structure,
+    functions: keep(structure.functions),
+    catches: keep(structure.catches),
+    calls: keep(structure.calls),
+    comments: keep(structure.comments),
+    elements: keep(structure.elements),
+    attributes: keep(structure.attributes),
+    strings: keep(structure.strings),
+  }
 }
 
 export function buildReviewContext(input: ReviewInput): ReviewContext {
   const byPath = new Map(input.files.map((f) => [f.path, f]))
-  // What the review judges: code the project ships, in a language it understands.
+  const config = input.config ?? EMPTY_CONFIG
+  // What the review judges: code the project ships, in a language it understands, minus
+  // anything the repository asked to be left alone.
   const sourceFiles = input.files.filter((f) => {
     if (!f.content) return false
     if (NON_SOURCE.test(f.path) || TEST_FILE.test(f.path) || NOT_PRODUCT_CODE.test(f.path))
       return false
+    if (isIgnored(config, f.path)) return false
     const lang = languageOf(f.path)
     return !!lang && CODE_LANGUAGES.has(lang)
   })
   const sourceSet = new Set(sourceFiles.map((f) => f.path))
   const structures = [...input.parsed.entries()]
     .filter(([path, p]) => p.structure && sourceSet.has(path))
-    .map(([path, p]) => ({ file: byPath.get(path)!, structure: p.structure! }))
+    .map(([path, p]) => {
+      const file = byPath.get(path)!
+      return { file, structure: withoutTestBlocks(p.structure!, testBlockRanges(file)) }
+    })
   const depNames = new Set(input.dependencies.map((d) => d.name))
   const sourceRoutes = input.routes.filter(
     (r) => !NOT_PRODUCT_CODE.test(r.file) && !TEST_FILE.test(r.file) && !NON_SOURCE.test(r.file),
@@ -112,6 +151,8 @@ export function buildReviewContext(input: ReviewInput): ReviewContext {
   )
   const isApplication = dependsOnFramework && sourceRoutes.length + input.entryPoints.length > 0
 
+  const testBlocks = new Map<string, [number, number][]>()
+
   return {
     files: input.files,
     byPath,
@@ -127,6 +168,15 @@ export function buildReviewContext(input: ReviewInput): ReviewContext {
     isApplication,
     hasDependency: (name) =>
       depNames.has(name) || [...depNames].some((d) => d.startsWith(name) || name.startsWith(d)),
+    inTestBlock(path, line) {
+      let ranges = testBlocks.get(path)
+      if (!ranges) {
+        const file = byPath.get(path)
+        ranges = file ? testBlockRanges(file) : []
+        testBlocks.set(path, ranges)
+      }
+      return ranges.some(([start, end]) => line >= start && line <= end)
+    },
     excerpt(path, line) {
       const text = byPath.get(path)?.content
       if (!text) return undefined
@@ -139,26 +189,69 @@ export function buildReviewContext(input: ReviewInput): ReviewContext {
 }
 
 /** Words whose presence on a line means every literal on it is treated as a credential. */
-const SECRET_CONTEXT =
-  /\b(secret|token|password|passwd|pwd|api[_-]?key|apikey|auth|credential|private[_-]?key|connection[_-]?string|dsn)\b/i
+const SECRET_WORDS = new Set([
+  'secret',
+  'secrets',
+  'token',
+  'tokens',
+  'password',
+  'passwd',
+  'pwd',
+  'passphrase',
+  'apikey',
+  'key',
+  'keys',
+  'credential',
+  'credentials',
+  'auth',
+  'authorization',
+  'privatekey',
+  'connectionstring',
+  'dsn',
+  'cert',
+  'certificate',
+  'signature',
+  'salt',
+])
+
+/** Literal prefixes of well-known credential formats, which are never safe to display. */
+const KEY_PREFIX =
+  /(['"`])(AKIA[0-9A-Z]{6,}|gh[pousr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9_-]{8,}|xox[baprs]-[A-Za-z0-9-]{8,}|AIza[0-9A-Za-z_-]{10,}|eyJ[A-Za-z0-9_-]{8,})[^'"`]*\1/g
+
+/**
+ * Split a line into the words its identifiers are made of, so `JWT_SECRET`, `authToken` and
+ * `api-key` all yield their parts.
+ *
+ * A plain `\bsecret\b` test does not: `_` is a word character, so `JWT_SECRET` never matches
+ * it. That gap let `process.env.JWT_SECRET || 'superSecret'` print its fallback value.
+ */
+function identifierWords(line: string): string[] {
+  return line
+    .split(/[^A-Za-z0-9]+/)
+    .flatMap((part) => part.replace(/([a-z0-9])([A-Z])/g, '$1 $2').split(' '))
+    .map((w) => w.toLowerCase())
+    .filter(Boolean)
+}
 
 /**
  * Redact anything that could be a credential before an excerpt is shown or exported.
  *
- * The rule is deliberately blunt: on a line that mentions a secret by name, every string
- * literal is replaced. A finding is still actionable with the value hidden — it cites the
- * file and line — and showing one real secret once is worse than redacting a hundred
- * harmless strings.
+ * The rule is deliberately blunt: on a line that names a secret, every string literal is
+ * replaced. A finding is still actionable with the value hidden — it cites the file and
+ * line — and showing one real secret once is worse than redacting a hundred harmless
+ * strings. It errs towards redaction, but not so far that `author: 'Jane Doe'` disappears.
  */
 export function redact(excerpt: string | undefined): string | undefined {
   if (!excerpt) return excerpt
   let out = excerpt
-  if (SECRET_CONTEXT.test(out)) {
-    out = out.replace(/(['"`])(?:(?!\1)[^\\]|\\.){4,}?\1/g, '$1[redacted]$1')
+  if (identifierWords(out).some((w) => SECRET_WORDS.has(w))) {
+    out = out.replace(/(['"`])(?:(?!\1)[^\\]|\\.){3,}?\1/g, '$1[redacted]$1')
   }
   return (
     out
-      // Long opaque literals anywhere: keys, tokens, hashes.
+      // Recognisable credential formats, wherever they appear.
+      .replace(KEY_PREFIX, '$1[redacted]$1')
+      // Long opaque literals: keys, tokens, hashes.
       .replace(/(['"`])[A-Za-z0-9+/_-]{24,}\1/g, '$1[redacted]$1')
       // Credentials embedded in a URL.
       .replace(/(:\/\/[^:@\s/]+:)[^@\s/]+@/g, '$1[redacted]@')
@@ -166,8 +259,10 @@ export function redact(excerpt: string | undefined): string | undefined {
 }
 
 export function runReview(input: ReviewInput): ReviewSummary {
-  const ctx = buildReviewContext(input)
-  const rules = input.rules ?? ALL_RULES
+  const config = input.config ?? loadReviewConfig(input.files)
+  const ctx = buildReviewContext({ ...input, config })
+  const allRules = input.rules ?? ALL_RULES
+  const rules = allRules.filter((r) => !isDisabled(config, r.id))
   const suggestions: Suggestion[] = []
   let seq = 0
 
@@ -185,7 +280,10 @@ export function runReview(input: ReviewInput): ReviewSummary {
         id: `s${++seq}`,
         rule: rule.id,
         category: rule.category,
-        severity: result.severity ?? rule.severity,
+        severity:
+          config.severity[rule.id] === undefined || config.severity[rule.id] === 'off'
+            ? (result.severity ?? rule.severity)
+            : (config.severity[rule.id] as SuggestionSeverity),
         confidence: result.confidence ?? rule.confidence ?? 'likely',
         title: result.title,
         detail: result.detail,
@@ -219,6 +317,14 @@ export function runReview(input: ReviewInput): ReviewSummary {
     rulesRun: rules.length,
     filesInspected: ctx.structures.length,
     sourceFileCount: ctx.sourceFiles.length,
+    configured: config.source
+      ? {
+          source: config.source,
+          rulesDisabled: allRules.length - rules.length,
+          pathsIgnored: config.ignore.length,
+          problems: config.problems,
+        }
+      : undefined,
   }
 }
 

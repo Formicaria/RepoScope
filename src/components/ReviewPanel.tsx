@@ -87,12 +87,14 @@ export function ReviewPanel({ review, onSelectNode }: ReviewPanelProps) {
           project hygiene — not correctness, and not anything specific to what this software is
           meant to do.
         </p>
+        <ConfiguredNote review={review} />
       </div>
     )
   }
 
   return (
     <div className="text-[13px]">
+      <ConfiguredNote review={review} />
       <div className="mb-3 flex flex-wrap items-center gap-1.5">
         <FilterChip active={category === 'all'} onClick={() => setCategory('all')}>
           All {review.suggestions.length}
@@ -181,6 +183,32 @@ export function ReviewPanel({ review, onSelectNode }: ReviewPanelProps) {
           )
         })}
       </ul>
+    </div>
+  )
+}
+
+/**
+ * A tuned review has to say so. Otherwise a clean list is ambiguous: it could mean the code is
+ * clean, or it could mean somebody switched the rules off.
+ */
+function ConfiguredNote({ review }: { review: ReviewSummary }) {
+  const c = review.configured
+  if (!c) return null
+  const tuning = [
+    c.rulesDisabled ? `${c.rulesDisabled} rule${c.rulesDisabled === 1 ? '' : 's'} disabled` : '',
+    c.pathsIgnored
+      ? `${c.pathsIgnored} path pattern${c.pathsIgnored === 1 ? '' : 's'} ignored`
+      : '',
+  ].filter(Boolean)
+  return (
+    <div className="border-border bg-surface-2/40 text-muted mb-3 max-w-4xl rounded-lg border px-3 py-2 text-[11.5px]">
+      Tuned by <code className="text-text font-mono">{c.source}</code>
+      {tuning.length > 0 && <> — {tuning.join(', ')}</>}.
+      {c.problems.map((p) => (
+        <div key={p} className="text-warn mt-1">
+          {p}
+        </div>
+      ))}
     </div>
   )
 }

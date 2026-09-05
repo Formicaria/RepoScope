@@ -103,6 +103,37 @@ describe('review rules', () => {
     expect(text).not.toContain('fallback-secret-here')
   })
 
+  /**
+   * These exact shapes leaked in 0.4.0: the redaction guard looked for `\bsecret\b`, which
+   * never matches `JWT_SECRET` because `_` is a word character. Every line here is a real
+   * one taken from the scan that found the bug.
+   */
+  it('redacts credentials that are part of a longer identifier', async () => {
+    const r = await review([
+      ...APP_BASE,
+      f(
+        'src/token.utils.ts',
+        'export const sign = (id: string) =>\n' +
+          "  jwt.sign({ user: { id } }, process.env.JWT_SECRET || 'superSecretValue', {\n" +
+          "    expiresIn: '60d',\n" +
+          '  })\n' +
+          "const AWS_SECRET_ACCESS_KEY = 'AKIAZZZZQQQQ1234ABCD'\n" +
+          "const DATABASE_URL = 'postgres://admin:hunter2pass@db.internal:5432/app'\n",
+      ),
+    ])
+    const text = JSON.stringify(r)
+    expect(text).not.toContain('superSecretValue')
+    expect(text).not.toContain('AKIAZZZZQQQQ1234ABCD')
+    expect(text).not.toContain('hunter2pass')
+  })
+
+  it('does not redact ordinary string literals', async () => {
+    const { redact } = await import('../server/analyzer/review/index.js')
+    expect(redact("const author = 'Jane Doe'")).toContain('Jane Doe')
+    expect(redact('log.info(`user ${id} signed in`)')).toContain('signed in')
+    expect(redact(undefined)).toBeUndefined()
+  })
+
   it('finds catch blocks that discard or merely log the error', async () => {
     if (needsParser()) return
     const body = (n: number) =>
@@ -226,6 +257,83 @@ describe('review rules', () => {
     expect(vulnerable.health.breakdown.some((b) => b.signal === 'Security review')).toBe(true)
   })
 
+  it('ignores tests written in the same file as the code they test', async () => {
+    if (needsParser()) return
+    // Two distinct blocks, each repeated three times, entirely inside `#[cfg(test)]`.
+    const block = (kind: string, i: number) =>
+      `        let builder_${kind}${i} = GlobBuilder::new(pattern_${kind});\n` +
+      `        builder_${kind}${i}.set_case_insensitive(${kind === 'ci'});\n` +
+      `        let glob_${kind}${i} = builder_${kind}${i}.build().unwrap();\n` +
+      `        let matcher_${kind}${i} = glob_${kind}${i}.compile_matcher();\n` +
+      `        assert!(matcher_${kind}${i}.is_match(candidate_${kind}));\n` +
+      `        assert_eq!(glob_${kind}${i}.glob(), pattern_${kind});`
+    const repeated = (kind: string) =>
+      [0, 1, 2]
+        .map((i) => block(kind, i).replace(new RegExp(`_${kind}${i}`, 'g'), `_${kind}`))
+        .join('\n        drop(());\n')
+    const tests =
+      '#[cfg(test)]\nmod tests {\n    use super::*;\n    #[test]\n    fn matching() {\n' +
+      repeated('ci') +
+      '\n' +
+      repeated('cs') +
+      '\n    }\n}\n'
+    const lib = 'pub fn compile(pattern: &str) -> Glob {\n    Glob::new(pattern)\n}\n\n'
+
+    const withTests = await review([
+      f('Cargo.toml', '[package]\nname = "globs"\nversion = "0.1.0"'),
+      f('src/lib.rs', lib + tests),
+    ])
+    expect(find(withTests, 'craft/duplicated-blocks')).toBeUndefined()
+
+    // The same duplication outside a test block is still reported, so the exclusion is
+    // narrow rather than a way of hiding findings.
+    const inProductCode = await review([
+      f('Cargo.toml', '[package]\nname = "globs"\nversion = "0.1.0"'),
+      f(
+        'src/lib.rs',
+        lib + tests.replace('#[cfg(test)]\nmod tests', 'pub mod helpers').replace('#[test]\n', ''),
+      ),
+    ])
+    expect(find(inProductCode, 'craft/duplicated-blocks')).toBeDefined()
+  })
+
+  it('tells commented-out code apart from documentation and wrapped prose', async () => {
+    if (needsParser()) return
+    const prose = [
+      '/// Decompresses the stream.',
+      '///',
+      '/// # Example',
+      '///',
+      '/// ```',
+      '/// use std::io::Read;',
+      '/// let reader = DecompressionReader::new(path)?;',
+      '/// ```',
+      '// We close stdout before reading, because if the child is still writing',
+      '// from the process, then closing stdout above results in',
+      '// return `false` even when the path is something resembling',
+      '// if we know we have not hit EOF (so we anticipate a broken pipe',
+      '// GPL (gpl.txt, etc.)',
+      'pub fn run() -> u8 {',
+      '    0',
+      '}',
+    ].join('\n')
+    const clean = await review([
+      f('Cargo.toml', '[package]\nname = "d"\nversion = "0.1.0"'),
+      f('src/lib.rs', prose),
+    ])
+    expect(find(clean, 'craft/commented-out-code')).toBeUndefined()
+
+    const dead = Array.from(
+      { length: 8 },
+      (_, i) => `    // let value_${i} = compute_${i}(input);\n    let value_${i} = 0;`,
+    ).join('\n')
+    const flagged = await review([
+      f('Cargo.toml', '[package]\nname = "d"\nversion = "0.1.0"'),
+      f('src/lib.rs', `pub fn run() {\n${dead}\n}`),
+    ])
+    expect(find(flagged, 'craft/commented-out-code')).toBeDefined()
+  })
+
   it('survives a rule that throws', async () => {
     const { runReview } = await import('../server/analyzer/review/index.js')
     const result = runReview({
@@ -261,5 +369,86 @@ describe('review rules', () => {
       ],
     })
     expect(result.suggestions.map((s) => s.rule)).toEqual(['test/works'])
+  })
+})
+
+describe('.reposcope.json', () => {
+  const cfg = (value: unknown) => f('.reposcope.json', JSON.stringify(value))
+  const LEAKY = f('src/config.ts', 'export const s = process.env.JWT_SECRET || "dev-secret-value"')
+
+  it('is absent by default and says nothing about being configured', async () => {
+    const r = await review([...APP_BASE, LEAKY])
+    expect(r?.configured).toBeUndefined()
+    expect(find(r, 'security/secret-default-value')).toBeDefined()
+  })
+
+  it('switches a rule off when the repository disables it', async () => {
+    const r = await review([
+      ...APP_BASE,
+      LEAKY,
+      cfg({ review: { disable: ['security/secret-default-value'] } }),
+    ])
+    expect(find(r, 'security/secret-default-value')).toBeUndefined()
+    expect(r?.configured?.source).toBe('.reposcope.json')
+    expect(r?.configured?.rulesDisabled).toBe(1)
+  })
+
+  it('excludes ignored paths, including a bare directory prefix', async () => {
+    const r = await review([
+      ...APP_BASE,
+      f('legacy/db/query.ts', LEAKY.content!),
+      cfg({ review: { ignore: ['legacy'] } }),
+    ])
+    expect(find(r, 'security/secret-default-value')).toBeUndefined()
+    expect(r?.configured?.pathsIgnored).toBe(1)
+  })
+
+  it('applies a severity override without hiding the finding', async () => {
+    const r = await review([
+      ...APP_BASE,
+      LEAKY,
+      cfg({ review: { severity: { 'security/secret-default-value': 'low' } } }),
+    ])
+    expect(find(r, 'security/secret-default-value')?.severity).toBe('low')
+  })
+
+  it('treats a severity of "off" as disabling the rule', async () => {
+    const r = await review([
+      ...APP_BASE,
+      LEAKY,
+      cfg({ review: { severity: { 'security/secret-default-value': 'off' } } }),
+    ])
+    expect(find(r, 'security/secret-default-value')).toBeUndefined()
+  })
+
+  it('reports a malformed config instead of silently obeying or ignoring it', async () => {
+    const r = await review([...APP_BASE, LEAKY, f('.reposcope.json', '{ "review": ')])
+    expect(r?.configured?.problems.join(' ')).toMatch(/not valid JSON/)
+    // A broken config must not disable the review.
+    expect(find(r, 'security/secret-default-value')).toBeDefined()
+  })
+
+  it('reports fields of the wrong shape and keeps the rest of the config', async () => {
+    const r = await review([
+      ...APP_BASE,
+      LEAKY,
+      cfg({
+        review: { ignore: 'legacy', severity: { 'security/secret-default-value': 'urgent' } },
+      }),
+    ])
+    const problems = r!.configured!.problems.join(' ')
+    expect(problems).toMatch(/"review.ignore"/)
+    expect(problems).toMatch(/severity/)
+    expect(find(r, 'security/secret-default-value')?.severity).toBe('critical')
+  })
+
+  it('matches path patterns the way the documentation says it does', async () => {
+    const { matchesPattern } = await import('../server/analyzer/review/index.js')
+    expect(matchesPattern('legacy', 'legacy/db/query.ts')).toBe(true)
+    expect(matchesPattern('legacy', 'legacy-tools/db.ts')).toBe(false)
+    expect(matchesPattern('src/**', 'src/a/b.ts')).toBe(true)
+    expect(matchesPattern('src/**', 'src')).toBe(true)
+    expect(matchesPattern('src/*.ts', 'src/a.ts')).toBe(true)
+    expect(matchesPattern('src/*.ts', 'src/a/b.ts')).toBe(false)
   })
 })

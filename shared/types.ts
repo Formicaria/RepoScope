@@ -192,6 +192,16 @@ export interface ReviewSummary {
   filesInspected: number
   /** Source files that were candidates for inspection. */
   sourceFileCount: number
+  /**
+   * Present when the repository supplied a `.reposcope.json`. A tuned review must say so —
+   * otherwise a short list reads as a clean codebase rather than a configured one.
+   */
+  configured?: {
+    source: string
+    rulesDisabled: number
+    pathsIgnored: number
+    problems: string[]
+  }
 }
 
 export interface ScanStats {

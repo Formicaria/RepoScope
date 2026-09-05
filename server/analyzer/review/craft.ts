@@ -60,6 +60,9 @@ const STOP_WORDS = new Set([
 const EXPLANATORY =
   /\b(because|since|why|note|caveat|beware|workaround|hack|todo|fixme|see |ref |refs |spec|rfc|issue|bug|per |assumes?|invariant|must|cannot|do not|don't|otherwise|instead|historically|legacy|temporar|deliberate|intentional)\b/i
 
+/** Documentation-comment markers across the languages RepoScope parses. */
+const DOC_COMMENT = /^\s*(\/\/[/!]|\/\*\*|\*\s|"""|'''|#'|--\||\/\/\/)/
+
 const narratingComments: Rule = {
   id: 'craft/narrating-comments',
   category: 'craft',
@@ -255,12 +258,19 @@ const commentedOutCode: Rule = {
         const t = c.text.trim()
         if (t.length < 8 || t.length > 200) continue
         if (EXPLANATORY.test(t)) continue
-        const looksLikeCode =
+        // Doc comments are documentation, and the good ones contain a worked example.
+        // Rust `///`, Java/C# `///` and `/** */`, and Python docstrings all read as code
+        // to the test below, and reporting an example as dead code is exactly backwards.
+        if (DOC_COMMENT.test(ctx.excerpt(file.path, c.line) ?? '')) continue
+        // A statement both starts like one and finishes like one. Prose in a wrapped comment
+        // block often starts with `if`, `for` or `return` — "// return `false` when the path
+        // is …" — so the opening word alone is not evidence of anything.
+        const startsLikeCode =
           /^(const|let|var|function|def|class|import|from|return|await|if|for|while|else|public|private|self\.|this\.)\b/.test(
             t,
-          ) ||
-          /[;{}]\s*$/.test(t) ||
-          /^\w+\s*[=(].*[)\]};]\s*$/.test(t)
+          ) || /^\w+\s*[=(]/.test(t)
+        const endsLikeCode = /[;{},([]\s*$|=>\s*$/.test(t)
+        const looksLikeCode = (startsLikeCode && endsLikeCode) || /[;{]\s*$/.test(t)
         if (looksLikeCode) hits.push({ path: file.path, line: c.line })
       }
     }
@@ -399,6 +409,7 @@ const duplicatedBlocks: Rule = {
         const key = slice.join('\n')
         const list = seen.get(key) ?? []
         // Only the first window of a run, to avoid reporting the same clone many times.
+        if (ctx.inTestBlock(f.path, i + 1)) continue
         if (
           list.length &&
           list[list.length - 1].path === f.path &&

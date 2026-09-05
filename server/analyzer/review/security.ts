@@ -31,8 +31,30 @@ function reachability(ctx: ReviewContext): {
       }
 }
 
-/** A string built by concatenation or interpolation, i.e. not a constant. */
-const INTERPOLATED = /\$\{|`[^`]*\$\{|["'][^"']*["']\s*\+|\+\s*["']|%\s*\(|\.format\(|f["']/
+/**
+ * A string built by concatenation or interpolation rather than written as a constant.
+ * Every language spells this differently, and missing one means the injection rules are
+ * silently inert for it.
+ */
+const INTERPOLATED =
+  /\$\{/.source + // JavaScript, TypeScript, Kotlin `${…}`
+  '|' +
+  /\$"/.source + // C# `$"… {x}"`
+  '|' +
+  /#\{/.source + // Ruby `#{…}`
+  '|' +
+  /f["']/.source + // Python f-strings
+  '|' +
+  /\.format\(/.source + // Python/Java .format()
+  '|' +
+  /%\s*[("']/.source + // Python %, Go Sprintf verbs
+  '|' +
+  /Sprintf|String\.format|MessageFormat/.source +
+  '|' +
+  /["'][^"']*["']\s*\+|\+\s*["']/.source + // concatenation
+  '|' +
+  /\$\w+/.source // PHP, shell "$var"
+const INTERPOLATED_RE = new RegExp(INTERPOLATED)
 
 function scanLines(
   ctx: ReviewContext,
@@ -47,11 +69,18 @@ function scanLines(
       const line = lines[i]
       if (line.length > 400) continue
       if (options.skipComments !== false && /^\s*(\/\/|#|\*|<!--)/.test(line)) continue
+      // Tests written beside the code they test are not shipped behaviour.
+      if (ctx.inTestBlock(f.path, i + 1)) continue
       if (test(line, f.path)) hits.push({ path: f.path, line: i + 1 })
     }
   }
   return hits
 }
+
+const SQL_KEYWORDS =
+  /\b(select|insert\s+into|update|delete\s+from|from|where|values|join|order\s+by)\b/i
+const QUERY_METHOD =
+  /\b(query|execute|executemany|raw|rawquery|exec|prepare|fromsql|fromsqlraw)(async)?$/i
 
 const sqlInjection: Rule = {
   id: 'security/sql-injection',
@@ -61,24 +90,47 @@ const sqlInjection: Rule = {
   effort: 'moderate',
   run(ctx) {
     const hits: { path: string; line: number }[] = []
+    const seen = new Set<string>()
+    const record = (path: string, line: number) => {
+      const key = `${path}:${line}`
+      if (seen.has(key)) return
+      seen.add(key)
+      hits.push({ path, line })
+    }
+
     for (const { file, structure } of ctx.structures) {
-      for (const call of structure.calls) {
-        // Query APIs across the ecosystems RepoScope parses.
-        if (!/\b(query|execute|executemany|raw|rawQuery|exec|Query|Exec|prepare)$/.test(call.name))
-          continue
-        if (!INTERPOLATED.test(call.args)) continue
+      const queryCalls = structure.calls.filter((c) => QUERY_METHOD.test(c.name))
+
+      // Interpolated directly at the call site: db.query(`… ${id}`).
+      for (const call of queryCalls) {
+        if (!INTERPOLATED_RE.test(call.args)) continue
         // Parameterised calls pass the values separately: query(sql, [a, b]).
-        if (/,\s*\[/.test(call.args) || /,\s*\(/.test(call.args)) continue
-        if (!/\b(select|insert|update|delete|from|where|values|join)\b/i.test(call.args)) continue
-        hits.push({ path: file.path, line: call.line })
+        if (/,\s*[[(]/.test(call.args)) continue
+        if (!SQL_KEYWORDS.test(call.args)) continue
+        record(file.path, call.line)
+      }
+
+      // Built into a variable first, then passed in — just as exploitable, and at least as
+      // common: `var sql = $"… {id}"; db.QueryAsync(sql);`
+      if (!queryCalls.length || !file.content) continue
+      const lines = file.content.split('\n')
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]
+        if (line.length > 400 || /^\s*(\/\/|#|\*)/.test(line)) continue
+        if (!SQL_KEYWORDS.test(line) || !INTERPOLATED_RE.test(line)) continue
+        // An assignment, not a call we already counted.
+        if (!/[=:]\s*[$`'"@]|[+]\s*['"]/.test(line)) continue
+        if (queryCalls.some((c) => c.line === i + 1)) continue
+        record(file.path, i + 1)
       }
     }
+
     if (!hits.length) return
     return {
       title: `SQL built by string interpolation in ${hits.length} place${hits.length === 1 ? '' : 's'}`,
       detail:
         'A query assembled from interpolated values lets anything that reaches those values rewrite the statement. One unescaped input is the difference between reading a row and dumping the table.',
-      fix: 'Pass values as parameters instead of interpolating them: `db.query("SELECT * FROM users WHERE id = $1", [id])`, `cursor.execute("… = %s", (id,))`. If the variable part is an identifier rather than a value, validate it against an allow-list of column names.',
+      fix: 'Pass values as parameters instead of interpolating them: `db.query("SELECT * FROM users WHERE id = $1", [id])`, `cursor.execute("… = %s", (id,))`, `new NpgsqlCommand("… = @id")` with `AddWithValue`. If the variable part is an identifier rather than a value, validate it against an allow-list of column names.',
       evidence: evidenceFrom(ctx, hits),
       occurrences: hits.length,
     }
@@ -99,7 +151,7 @@ const commandInjection: Rule = {
           /\b(exec|execSync|spawnSync|system|popen|shell_exec|passthru)$/.test(call.name) ||
           /subprocess\.(run|call|check_output|Popen)$/.test(call.name)
         if (!shellCall) continue
-        if (!INTERPOLATED.test(call.args)) continue
+        if (!INTERPOLATED_RE.test(call.args)) continue
         // subprocess with an argument list and no shell=True is already safe.
         if (/shell\s*=\s*False/.test(call.args)) continue
         if (/^\(\s*\[/.test(call.args) && !/shell\s*=\s*True/.test(call.args)) continue
@@ -253,7 +305,7 @@ const secretFallback: Rule = {
   effort: 'quick',
   run(ctx) {
     const hits = scanLines(ctx, (line) =>
-      /(?:SECRET|TOKEN|PASSWORD|API_?KEY|PRIVATE_KEY)[A-Z_]*\s*(?:\)|\])?\s*(?:\|\||\?\?|,\s*)\s*['"][^'"]{3,}['"]/.test(
+      /(?:SECRET|TOKEN|PASSWORD|API_?KEY|PRIVATE_KEY)[A-Z_]*['"]?\s*[)\]]*\s*(?:\|\||\?\?|\bor\b|,)\s*['"][^'"]{3,}['"]/.test(
         line,
       ),
     )
