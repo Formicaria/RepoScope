@@ -27,6 +27,14 @@ const SECRET_PATTERNS: { name: string; re: RegExp }[] = [
   },
 ]
 
+/**
+ * Test fixtures, sample apps and documentation routinely commit throwaway keys and .env
+ * files on purpose. They are worth mentioning but they are not leaked credentials, so they
+ * are reported at info severity and left out of the health score.
+ */
+const FIXTURE_CONTEXT =
+  /(^|\/)(tests?|__tests__|test_apps?|fixtures?|spec|specs|examples?|samples?|demos?|docs?|e2e|cypress|playwright|testdata|mocks?|__mocks__)\//i
+
 const PLACEHOLDER =
   /(example|placeholder|changeme|your[_-]?|xxx|dummy|<[^>]+>|\$\{|process\.env|os\.environ|getenv|\.\.\.|@(localhost|127\.0\.0\.1|db|database|postgres|mysql|mongo|redis|host)\b)/i
 
@@ -130,11 +138,16 @@ export function detectWarnings(input: WarningInput): Warning[] {
         /\.(pem|key|p12|pfx|jks|keystore)$/i.test(name) ||
         /^id_/.test(name)
       ) {
+        const fixture = FIXTURE_CONTEXT.test(f.path)
         add({
           kind: 'exposed-secret',
-          severity: 'critical',
-          title: `Secret-carrying file committed: ${f.path}`,
-          detail: `${name} is tracked in the repository. Its contents were not read or displayed. Move secrets to an untracked file or a secret manager and add it to .gitignore.`,
+          severity: fixture ? 'info' : 'critical',
+          title: fixture
+            ? `Test fixture holds a secret-carrying file: ${f.path}`
+            : `Secret-carrying file committed: ${f.path}`,
+          detail: fixture
+            ? `${name} sits under a test or example folder, so it is most likely deliberate throwaway data. Its contents were not read or displayed. Worth confirming it holds nothing real.`
+            : `${name} is tracked in the repository. Its contents were not read or displayed. Move secrets to an untracked file or a secret manager and add it to .gitignore.`,
           path: f.path,
           nodeId: nodeByPath.get(f.path)?.id,
         })
@@ -142,7 +155,7 @@ export function detectWarnings(input: WarningInput): Warning[] {
       continue
     }
     if (!f.content) continue
-    if (/(^|\/)(tests?|__tests__|fixtures?|spec|examples?|docs?)\//.test(f.path)) continue
+    if (FIXTURE_CONTEXT.test(f.path)) continue
     const lines = f.content.split('\n')
     let hits = 0
     for (let i = 0; i < lines.length && hits < 3; i++) {
@@ -225,6 +238,8 @@ export function detectWarnings(input: WarningInput): Warning[] {
   for (const n of graph.nodes) {
     if (n.parent) continue
     if (!['module', 'service', 'database', 'component'].includes(n.type)) continue
+    // "Nothing imports the repository root" is not a finding.
+    if (n.path === '/' || n.path === '') continue
     if (entryModules.has(n.id)) continue
     if (n.dependents.length > 0) continue
     if ((n.meta?.files ?? 0) < 2) continue

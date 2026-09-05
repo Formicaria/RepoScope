@@ -130,7 +130,8 @@ async function measure(entry: CorpusEntry): Promise<RepoMetrics> {
     unresolvedLocalRate: round((d?.unresolvedLocal.length ?? 0) / Math.max(1, resolvable)),
     entryPoints: result.entryPoints,
     frameworks: result.frameworks,
-    routes: top.reduce((n, x) => n + (x.meta?.routes?.length ?? 0), 0),
+    // Routes detected, not the per-module display subset — the metric must track truth.
+    routes: d?.routesDetected ?? 0,
     nodeTypes: tally(top.map((n) => n.type)),
     warningKinds: tally(result.warnings.map((w) => w.kind)),
     health: result.health.score,
@@ -219,16 +220,21 @@ async function main() {
     { resolved: 0, unresolved: 0, edges: 0, ms: 0 },
   )
   const rate = round(totals.unresolved / Math.max(1, totals.resolved + totals.unresolved))
-  const prevTotals = previous?.repos.reduce(
-    (a, m) => ({
-      resolved: a.resolved + m.resolvedInternal,
-      unresolved: a.unresolved + m.unresolvedLocal,
-    }),
-    { resolved: 0, unresolved: 0 },
-  )
-  const prevRate = prevTotals
-    ? round(prevTotals.unresolved / Math.max(1, prevTotals.resolved + prevTotals.unresolved))
-    : undefined
+  // Compare like with like: when --only narrows the run, the baseline must narrow too.
+  const scanned = new Set(metrics.map((m) => m.name))
+  const prevTotals = previous?.repos
+    .filter((r) => scanned.has(r.name))
+    .reduce(
+      (a, m) => ({
+        resolved: a.resolved + m.resolvedInternal,
+        unresolved: a.unresolved + m.unresolvedLocal,
+      }),
+      { resolved: 0, unresolved: 0 },
+    )
+  const prevRate =
+    prevTotals && prevTotals.resolved + prevTotals.unresolved > 0
+      ? round(prevTotals.unresolved / Math.max(1, prevTotals.resolved + prevTotals.unresolved))
+      : undefined
 
   process.stdout.write(
     `\ncorpus: ${metrics.length} repos · ${totals.resolved} resolved imports · ${totals.edges} file edges · ${(totals.ms / 1000).toFixed(1)}s\n` +

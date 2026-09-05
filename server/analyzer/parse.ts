@@ -56,6 +56,10 @@ const GRAMMAR_BY_EXT: Record<string, string> = {
   '.cjs': 'javascript',
   '.mts': 'typescript',
   '.cts': 'typescript',
+  // Single-file components: the script blocks are extracted and parsed as TypeScript.
+  '.vue': 'typescript',
+  '.svelte': 'typescript',
+  '.astro': 'typescript',
 }
 
 export function grammarFor(filePath: string): string | undefined {
@@ -532,6 +536,38 @@ const EXTRACTORS: Record<string, (root: AnyNode) => ParsedFile> = {
   cpp: extractC,
 }
 
+const SFC_EXTENSIONS = /\.(vue|svelte|astro)$/i
+const SCRIPT_BLOCK = /<script\b[^>]*>([\s\S]*?)<\/script>/gi
+const ASTRO_FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/
+
+/**
+ * Pull the script out of a single-file component so it can be parsed as TypeScript.
+ *
+ * Blank lines replace the template and style sections, which keeps every reported line
+ * number matching the original file. Returns undefined when there is no script to read.
+ */
+export function extractComponentScript(path: string, content: string): string | undefined {
+  if (!SFC_EXTENSIONS.test(path)) return undefined
+  const blank = (text: string) => text.replace(/[^\n]/g, '')
+  if (/\.astro$/i.test(path)) {
+    const m = content.match(ASTRO_FRONTMATTER)
+    return m ? blank(content.slice(0, m.index! + 4)) + m[1] : undefined
+  }
+  let out = ''
+  let cursor = 0
+  let found = false
+  SCRIPT_BLOCK.lastIndex = 0
+  for (const m of content.matchAll(SCRIPT_BLOCK)) {
+    // m[1] is the script body; everything before it in the match is the opening tag.
+    const bodyStart = m.index! + m[0].length - m[1].length - '</script>'.length
+    found = true
+    out += blank(content.slice(cursor, bodyStart)) + m[1]
+    cursor = bodyStart + m[1].length
+  }
+  if (!found) return undefined
+  return out + blank(content.slice(cursor))
+}
+
 /**
  * Parse one file's imports. Returns undefined when no grammar applies, the file is too
  * large, or parsing fails — callers fall back to the regex extractor.
@@ -542,11 +578,17 @@ export async function parseFile(file: RepoFile): Promise<ParsedFile | undefined>
   if (!grammar) return undefined
   const extract = EXTRACTORS[grammar]
   if (!extract) return undefined
+  let source = file.content
+  if (SFC_EXTENSIONS.test(file.path)) {
+    const script = extractComponentScript(file.path, file.content)
+    if (script === undefined) return { imports: [] }
+    source = script
+  }
   const parser = await getParser(grammar)
   if (!parser) return undefined
   let tree: AnyTree | null = null
   try {
-    tree = parser.parse(file.content)
+    tree = parser.parse(source)
     if (!tree) return undefined
     return extract(tree.rootNode)
   } catch {

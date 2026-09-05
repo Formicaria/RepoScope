@@ -145,6 +145,8 @@ export interface ScanStats {
 export interface AnalysisDiagnostics {
   parsedFiles: number
   regexFiles: number
+  /** API routes detected, before the per-module display cap. */
+  routesDetected: number
   totalSpecifiers: number
   resolvedInternal: number
   external: number

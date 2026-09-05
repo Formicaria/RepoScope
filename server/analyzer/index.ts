@@ -7,7 +7,7 @@ import {
   detectStorage,
 } from './detect.js'
 import { buildGraph } from './graph.js'
-import { analyzeImports } from './imports.js'
+import { analyzeImports, workspaceDirectories } from './imports.js'
 import { computeHealth } from './score.js'
 import { buildTemplateSummary, templateProvider, type SummaryProvider } from './summary.js'
 import { detectWarnings } from './warnings.js'
@@ -48,7 +48,7 @@ export async function analyzeRepository(
   await tick()
   const languages = detectLanguages(files)
   const manifests = detectManifests(files)
-  const entryPoints = detectEntryPoints(files, manifests.entryHints)
+  const entryPoints = detectEntryPoints(files, manifests.entryHints, workspaceDirectories(files))
 
   progress('dependencies', 45, 'Resolving imports')
   await tick()
@@ -73,6 +73,7 @@ export async function analyzeRepository(
     const eco = ECOSYSTEM_BY_LANG[l.name]
     if (eco && l.files > 0) hasImportsFor.add(eco)
   }
+  diagnostics.routesDetected = routes.length
   const warnings = detectWarnings({
     files,
     graph,

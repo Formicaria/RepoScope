@@ -35,13 +35,18 @@ export function computeHealth(input: ScoreInput): HealthScore {
   else apply('Tests', 0, 'Tests present')
 
   // Secrets
-  const secrets = count('exposed-secret')
+  // Only real findings are penalised. Secrets inside test fixtures are reported at info
+  // severity because committing throwaway keys and .env files there is normal and deliberate.
+  const secrets = count('exposed-secret').filter((w) => w.severity !== 'info')
+  const fixtureSecrets = count('exposed-secret').length - secrets.length
   if (secrets.length)
     apply(
       'Secrets',
       -Math.min(30, 15 + secrets.length * 5),
       `${secrets.length} possible exposed secret(s)`,
     )
+  else if (fixtureSecrets)
+    apply('Secrets', 0, `${fixtureSecrets} secret-carrying test fixture(s), not counted`)
   else apply('Secrets', 0, 'No secrets detected')
 
   // Circular dependencies

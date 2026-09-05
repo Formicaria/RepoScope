@@ -103,6 +103,7 @@ Every stage is a pure function over the previous stage's output, so the parser, 
 | Language                | Import resolution | How                                                                                                          |
 | ----------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------ |
 | TypeScript / JavaScript | ✅                | relative paths, `tsconfig`/`jsconfig` `paths` (wildcards included), Vite aliases, `$lib`, workspace packages |
+| Vue / Svelte / Astro    | ✅                | the component's script block is extracted and parsed as TypeScript                                           |
 | Python                  | ✅                | absolute, relative and `from . import module`, any project root                                              |
 | Go                      | ✅                | module-local packages, multi-module repositories                                                             |
 | Rust                    | ✅                | `mod`, `crate::`, and sibling crates in a Cargo workspace                                                    |

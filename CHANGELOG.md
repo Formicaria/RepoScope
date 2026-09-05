@@ -6,6 +6,54 @@ All notable changes to RepoScope are documented here. The format follows [Keep a
 
 See [ROADMAP.md](ROADMAP.md) for what is planned next.
 
+## [0.3.0] — 2026-09-05
+
+Accuracy release aimed at what the map actually shows. Health scores rose sharply on
+well-maintained projects because several findings turned out to be false positives.
+
+### Added
+
+- Vue, Svelte and Astro single-file components are parsed: the script block is extracted and
+  read as TypeScript, with blank lines standing in for the template and style sections so
+  reported line numbers still match the file. Parse coverage on a SvelteKit project went from
+  46% to 100%.
+- Module boundaries now come from declared packages — any directory with a `package.json`,
+  `go.mod`, `Cargo.toml` or `pyproject.toml` — instead of a hard-coded list of folder names.
+  A Cargo workspace under `crates/` gets one module per crate rather than one blob.
+- Entry points are scored (manifest > framework root > package-root convention > convention >
+  content signal), the best is kept per package, and the list is capped and ranked so the
+  first is the primary way in.
+- Framework roots are recognised: Next.js `app/layout` and `pages/_app`, SvelteKit's root
+  layout, Nuxt's default layout, `App.vue` / `App.svelte`.
+- `routesDetected` in scan diagnostics: routes found, before the per-module display cap.
+
+### Fixed
+
+- A Cargo/Go/npm workspace in an unconventionally named folder collapsed into a single
+  module. ripgrep's 13 crates were one node joined by one edge; they are now 23 modules with
+  16 connections.
+- Secret-carrying files inside test fixtures (`tests/client_certs/client.pem`,
+  `tests/test_apps/.env`) were reported as critical and cost 20 health points. They are now
+  reported at info severity and excluded from the score: httpie +30, chi +23, flask +18.
+- File-based API routes were anchored to the repository root, so a Next.js or SvelteKit app
+  under `apps/web/` reported no routes at all. linkwarden went from 0 to 58.
+- The repository root was reported as a dead module, and standalone tooling packages that
+  nothing imports by design were reported as dead code.
+- Test files (`*_test.go`, `*.spec.ts`, `test_*.py`) could be lifted onto the map as entry
+  points.
+- Example and sample folders that declare their own manifest were classified as APIs or
+  applications rather than documentation.
+- A package whose only file was lifted into an entry node left an empty module behind.
+- Module labels showed raw package identifiers (`github.com/go-chi/chi/v5` rather than `chi`).
+- The benchmark's `routes` metric counted the display-capped subset, and its corpus totals
+  compared a `--only` subset against the full snapshot.
+
+### Changed
+
+- `detectEntryPoints` takes the package directories and returns a ranked, capped list.
+- `classifyModule` takes the package directories so any manifest-bearing directory is typed
+  as an application.
+
 ## [0.2.0] — 2026-09-05
 
 Accuracy release. The unresolved-local rate across the benchmark corpus fell from 3.4% to 0.6%.

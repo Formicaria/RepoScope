@@ -15,7 +15,7 @@ import {
   type RouteInfo,
   type StorageInfo,
 } from './detect.js'
-import type { FileImport } from './imports.js'
+import { workspaceDirectories, type FileImport } from './imports.js'
 import { basename, dirname, slug } from './paths.js'
 
 /** Folders that only group other folders — we look one level deeper inside them. */
@@ -81,34 +81,35 @@ function isCodeFile(p: string): boolean {
   return !!l && CODE_LANGUAGES.has(l)
 }
 
-const WORKSPACE_DIRS = new Set(['packages', 'apps', 'services', 'cmd', 'libs', 'modules'])
-/** Monorepo packages with more code files than this are split into their sub-folders. */
+const WORKSPACE_DIRS = new Set(['packages', 'apps', 'services', 'cmd', 'libs', 'modules', 'crates'])
+/** Packages with more code files than this are split into their sub-folders. */
 export const SPLIT_PACKAGE_THRESHOLD = 25
 
 /**
  * Decide which module (folder group) a file belongs to. Returns a folder path or '' for root.
- * `dirCounts` maps a directory prefix to the number of code files beneath it.
+ *
+ * `packageDirs` holds directories that declare a package (from any manifest, deepest first).
+ * They take priority over folder-name conventions, so a Cargo workspace under `crates/`, a Go
+ * multi-module repo or an unconventional layout gets one module per package rather than one
+ * module for the whole folder. `dirCounts` maps a directory prefix to the number of code
+ * files beneath it.
  */
 export function moduleKeyFor(
   path: string,
   allDirs: Set<string>,
   dirCounts: Map<string, number> = new Map(),
+  packageDirs: string[] = [],
 ): string {
   const parts = path.split('/')
   if (parts.length === 1) return ''
+
+  // A declared package wins: find the deepest one containing this file.
+  const pkg = packageDirs.find((d) => path.startsWith(d + '/'))
+  if (pkg) return splitLargePackage(path, pkg, dirCounts)
+
   const top = parts[0]
   if (WORKSPACE_DIRS.has(top) && parts.length > 2) {
-    const pkg = `${top}/${parts[1]}`
-    if ((dirCounts.get(pkg) ?? 0) <= SPLIT_PACKAGE_THRESHOLD) return pkg
-    // Large package: descend past container folders (src, lib, app) to the first meaningful folder.
-    let i = 2
-    let key = pkg
-    if (i < parts.length - 1 && ['src', 'lib', 'app'].includes(parts[i])) {
-      key = `${key}/${parts[i]}`
-      i++
-    }
-    if (i < parts.length - 1) return `${key}/${parts[i]}`
-    return key
+    return splitLargePackage(path, `${top}/${parts[1]}`, dirCounts)
   }
   if (CONTAINER_DIRS.has(top) && parts.length > 2) {
     const second = parts[1]
@@ -124,7 +125,33 @@ export function moduleKeyFor(
   return top
 }
 
+/**
+ * Keep a package whole while it is small enough to read at a glance; above the threshold,
+ * descend past container folders (src, lib, app) to its first meaningful sub-folder.
+ */
+function splitLargePackage(path: string, pkg: string, dirCounts: Map<string, number>): string {
+  if ((dirCounts.get(pkg) ?? 0) <= SPLIT_PACKAGE_THRESHOLD) return pkg
+  const parts = path.split('/')
+  let i = pkg.split('/').length
+  let key = pkg
+  if (i < parts.length - 1 && ['src', 'lib', 'app'].includes(parts[i])) {
+    key = `${key}/${parts[i]}`
+    i++
+  }
+  return i < parts.length - 1 ? `${key}/${parts[i]}` : key
+}
+
 /** Human name for a module key: drop a leading container folder, keep the last two segments. */
+/**
+ * A package's published name is often a path or a scope ("github.com/go-chi/chi/v5",
+ * "@acme/ui"). The map needs the part a person would say out loud.
+ */
+export function displayPackageName(name: string): string {
+  const withoutVersion = name.replace(/\/v\d+$/, '')
+  const last = withoutVersion.split('/').filter(Boolean).pop() ?? name
+  return last
+}
+
 export function moduleNameFor(key: string): string {
   const parts = key.split('/')
   if (parts.length === 1) return key
@@ -132,7 +159,12 @@ export function moduleNameFor(key: string): string {
   return trimmed.slice(-3).join('/')
 }
 
-export function classifyModule(key: string, files: RepoFile[], routeFiles: Set<string>): NodeType {
+export function classifyModule(
+  key: string,
+  files: RepoFile[],
+  routeFiles: Set<string>,
+  packageDirs: string[] = [],
+): NodeType {
   const name = basename(key) || key
   const parentName = basename(dirname(key))
   const codeFiles = files.filter((f) => isCodeFile(f.path))
@@ -143,6 +175,10 @@ export function classifyModule(key: string, files: RepoFile[], routeFiles: Set<s
   )
     return 'test'
   if (DOCS_DIR.test(name)) return 'docs'
+  // A runnable sample is still a sample: `examples/tutorial` with its own manifest and
+  // routes is documentation, not part of the architecture being mapped.
+  if (key.split('/').some((seg) => /^_?(examples?|samples?|demos?|docs?)$/i.test(seg)))
+    return 'docs'
   if (key.startsWith('.github') || CONFIG_DIR.test(name) || codeFiles.length === 0) return 'config'
   if (
     codeFiles.every((f) =>
@@ -153,11 +189,13 @@ export function classifyModule(key: string, files: RepoFile[], routeFiles: Set<s
   )
     return 'config'
   const segs = key.split('/')
-  if (
-    WORKSPACE_DIRS.has(segs[0]) &&
-    (segs.length === 2 || (segs.length === 3 && ['src', 'lib', 'app'].includes(segs[2])))
-  )
-    return routeHits > 0 && codeFiles.length < 15 ? 'api' : 'app'
+  // Anything that declares its own manifest is a package in its own right — that is what
+  // makes it a unit someone can run or publish, not the name of the folder above it.
+  const isPackage =
+    packageDirs.includes(key) ||
+    (WORKSPACE_DIRS.has(segs[0]) &&
+      (segs.length === 2 || (segs.length === 3 && ['src', 'lib', 'app'].includes(segs[2]))))
+  if (isPackage) return routeHits > 0 && codeFiles.length < 15 ? 'api' : 'app'
   if (API_DIR.test(name) || (routeHits > 0 && routeHits >= Math.max(1, codeFiles.length / 3)))
     return 'api'
   if (DB_DIR.test(name)) return 'database'
@@ -347,6 +385,8 @@ export function buildGraph(input: GraphInput): GraphOutput {
   const routesByFile = new Map<string, RouteInfo[]>()
   for (const r of routes) routesByFile.set(r.file, [...(routesByFile.get(r.file) ?? []), r])
 
+  // Directories that declare a package define module boundaries; deepest match wins.
+  const packageDirs = workspaceDirectories(files)
   const allDirs = new Set<string>()
   const dirCounts = new Map<string, number>()
   for (const f of files) {
@@ -371,7 +411,7 @@ export function buildGraph(input: GraphInput): GraphOutput {
   const groups = new Map<string, RepoFile[]>()
   for (const f of files) {
     if (liftedEntries.has(f.path)) continue
-    const key = moduleKeyFor(f.path, allDirs, dirCounts)
+    const key = moduleKeyFor(f.path, allDirs, dirCounts, packageDirs)
     groups.set(key, [...(groups.get(key) ?? []), f])
   }
 
@@ -443,14 +483,19 @@ export function buildGraph(input: GraphInput): GraphOutput {
     }
   }
 
+  // A package whose only file was lifted into an entry node would otherwise leave an empty
+  // module behind, so those groups are dropped before any node is created.
+  for (const [key, groupFiles] of [...groups]) {
+    if (groupFiles.length === 0) groups.delete(key)
+  }
   const keys = [...groups.keys()].sort()
   for (const key of keys) {
     const groupFiles = groups.get(key)!
     if (key === '') {
-      addModule('', 'module', rootName, groupFiles)
+      addModule('', 'module', displayPackageName(rootName), groupFiles)
       continue
     }
-    const type = classifyModule(key, groupFiles, routeFiles)
+    const type = classifyModule(key, groupFiles, routeFiles, packageDirs)
     addModule(key, type, moduleNameFor(key), groupFiles)
   }
   if (rootConfig.length) addModule('__config', 'config', 'Configuration', rootConfig)
@@ -463,10 +508,17 @@ export function buildGraph(input: GraphInput): GraphOutput {
     fileModule.set(p, id)
     const f = files.find((x) => x.path === p)
     const parts = p.split('/')
-    const generic = /^(index|main|app|server|program|mod)\.\w+$/i.test(basename(p))
+    const generic = /^(index|main|lib|app|server|program|mod)\.\w+$/i.test(basename(p))
+    // "src/index.ts" tells a reader nothing in a monorepo; name it after its package.
+    const owningPackage = packageDirs.find((d) => p.startsWith(d + '/'))
+    const label = generic
+      ? owningPackage
+        ? `${basename(owningPackage)}/${basename(p)}`
+        : parts.slice(-2).join('/')
+      : basename(p)
     nodes.push({
       id,
-      name: generic && parts.length > 1 ? parts.slice(-2).join('/') : basename(p),
+      name: label,
       type: 'entry',
       path: p,
       description: `Entry point. ${entryReason(f)}`,

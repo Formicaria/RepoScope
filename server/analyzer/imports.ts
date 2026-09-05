@@ -22,6 +22,8 @@ export interface ImportDiagnostics {
   /** Files whose imports came from a syntax tree rather than regular expressions. */
   parsedFiles: number
   regexFiles: number
+  /** Filled in by the analyzer once routes have been detected. */
+  routesDetected: number
   totalSpecifiers: number
   resolvedInternal: number
   external: number
@@ -63,7 +65,8 @@ export function extractSpecifiers(file: RepoFile): string[] {
     case 'TypeScript':
     case 'JavaScript':
     case 'Vue':
-    case 'Svelte': {
+    case 'Svelte':
+    case 'Astro': {
       for (const m of c.matchAll(/\bimport\s+(?:[^'"`;]*?\s+from\s+)?['"]([^'"]+)['"]/g))
         out.push(m[1])
       for (const m of c.matchAll(/\bexport\s+(?:\*|\{[^}]*\})\s+from\s+['"]([^'"]+)['"]/g))
@@ -149,13 +152,69 @@ interface Resolver {
   workspaces: Map<string, string>
 }
 
+/**
+ * Packages declared inside the repository: published name -> directory.
+ *
+ * Any manifest that names a package counts, wherever it sits, so this covers npm/pnpm/yarn
+ * workspaces, Go multi-module repositories and Cargo workspaces without hard-coding folder
+ * names like `packages/` or `crates/`. The graph builder uses the same directories as module
+ * boundaries, which is why it lives here rather than inside the resolver.
+ */
+export function collectWorkspacePackages(files: RepoFile[]): Map<string, string> {
+  const workspaces = new Map<string, string>()
+  for (const f of files) {
+    if (!f.content || !f.path.includes('/')) continue
+    const dir = dirname(f.path)
+    switch (basename(f.path)) {
+      case 'package.json': {
+        try {
+          const pkg = JSON.parse(f.content) as { name?: unknown }
+          if (typeof pkg.name === 'string' && pkg.name) workspaces.set(pkg.name, dir)
+        } catch {
+          /* malformed manifest */
+        }
+        break
+      }
+      case 'go.mod': {
+        const mod = f.content.match(/^module\s+(\S+)/m)?.[1]
+        if (mod) workspaces.set(mod, dir)
+        break
+      }
+      case 'Cargo.toml': {
+        const name = f.content.match(/\[package\][\s\S]*?name\s*=\s*"([^"]+)"/)?.[1]
+        // Cargo crate names use hyphens; `use` paths use underscores.
+        if (name) {
+          workspaces.set(name, dir)
+          workspaces.set(name.replace(/-/g, '_'), dir)
+        }
+        break
+      }
+      case 'pyproject.toml': {
+        const name = f.content.match(/^\s*name\s*=\s*"([^"]+)"/m)?.[1]
+        if (name) workspaces.set(name, dir)
+        break
+      }
+      default:
+        break
+    }
+  }
+  return workspaces
+}
+
+/** The distinct directories that hold a package, deepest first. */
+export function workspaceDirectories(files: RepoFile[]): string[] {
+  return [...new Set(collectWorkspacePackages(files).values())]
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length)
+}
+
 function buildResolver(files: RepoFile[], parsed: Map<string, ParsedFile>): Resolver {
   const byPath = new Set(files.map((f) => f.path))
   const byStem = new Map<string, string[]>()
   const csNamespaces = new Map<string, string[]>()
   const pyModules = new Map<string, string>()
   const packages = new Map<string, string[]>()
-  const workspaces = new Map<string, string>()
+  const workspaces = collectWorkspacePackages(files)
   const aliases: Resolver['aliases'] = []
   let goModule: string | undefined
 
@@ -194,29 +253,8 @@ function buildResolver(files: RepoFile[], parsed: Map<string, ParsedFile>): Reso
     if (basename(f.path) === 'go.mod' && !f.path.includes('/') && f.content) {
       goModule = f.content.match(/^module\s+(\S+)/m)?.[1]
     }
-    // Workspace packages: every manifest that names a package maps that name to its folder.
+    // Workspace packages come from collectWorkspacePackages, below.
     const dir = dirname(f.path)
-    const base = basename(f.path)
-    if (base === 'package.json' && f.content) {
-      try {
-        const pkg = JSON.parse(f.content) as { name?: unknown }
-        if (typeof pkg.name === 'string' && pkg.name && f.path.includes('/')) {
-          workspaces.set(pkg.name, dir)
-        }
-      } catch {
-        /* malformed manifest */
-      }
-    } else if (base === 'go.mod' && f.content && f.path.includes('/')) {
-      const mod = f.content.match(/^module\s+(\S+)/m)?.[1]
-      if (mod) workspaces.set(mod, dir)
-    } else if (base === 'Cargo.toml' && f.content && f.path.includes('/')) {
-      const name = f.content.match(/\[package\][\s\S]*?name\s*=\s*"([^"]+)"/)?.[1]
-      // Cargo crate names use hyphens; `use` paths use underscores.
-      if (name) {
-        workspaces.set(name, dir)
-        workspaces.set(name.replace(/-/g, '_'), dir)
-      }
-    }
 
     // SvelteKit's `$lib`, and Vite/webpack aliases declared in a config file.
     if (/(^|\/)svelte\.config\.[cm]?[jt]s$/.test(f.path)) {
@@ -733,6 +771,7 @@ export async function analyzeImports(files: RepoFile[]): Promise<ImportAnalysis>
   const diagnostics: ImportDiagnostics = {
     parsedFiles: parsed.size,
     regexFiles: 0,
+    routesDetected: 0,
     totalSpecifiers: 0,
     resolvedInternal: 0,
     external: 0,
@@ -768,6 +807,7 @@ export async function analyzeImports(files: RepoFile[]): Promise<ImportAnalysis>
         case 'JavaScript':
         case 'Vue':
         case 'Svelte':
+        case 'Astro':
         case 'C':
         case 'C++': {
           const hit = resolveJsLike(r, dir, raw)

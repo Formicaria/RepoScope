@@ -27,10 +27,13 @@ Make the analysis right more often, and make it obvious _why_ the map looks the 
 - ✅ **Benchmark corpus.** `npm run bench` scans ten public repositories and diffs against a committed snapshot; the unresolved-local rate fell from 3.4% to 0.6%.
 - ⏳ **Edge evidence.** Hover or click an aggregated edge to see the actual file-to-file imports behind it.
 - ⏳ **Explain this classification.** Each module node shows which rule typed it (folder name, route density, JSX share, …) so mis-typings are debuggable and reportable.
-- ⏳ **Two-level hierarchy for monorepos.** App/package → module → file, with collapsible package groups, instead of flattening every sub-folder of a large package.
+- ✅ **Package-aware module boundaries.** Every declared package is its own module, whatever the folder is called; large packages still split into sub-folders.
+- ⏳ **Two-level hierarchy for monorepos.** Collapsible package groups (package → module → file) rather than a flat list of package modules.
 - ⏳ **C# project references** from `.csproj`, and NuGet-style namespace disambiguation.
 - ⏳ **Django `urls.py`, NestJS decorators, tRPC and GraphQL schema routes.**
-- ⏳ **Framework-aware entry points** (Next.js `app/`, Nuxt, SvelteKit, Django `manage.py` + `wsgi`) with a clear "primary" entry instead of a list.
+- ⏳ **Calibrate the health score** against the corpus now that the fixture-secret false positive is gone; several penalties are still guesses.
+- ✅ **Framework-aware, ranked entry points** (Next.js, Nuxt, SvelteKit, package-relative `main`), capped so a monorepo shows one way in per package instead of 32 candidates.
+- ✅ **Single-file components.** Vue, Svelte and Astro script blocks are parsed.
 - ⏳ **Symbol-level edges.** Use the names each import binds (already parsed) so a barrel import does not imply a dependency on everything the barrel re-exports.
 - ⏳ **Frontend → backend edges.** Link a `fetch('/api/users')` call to the route that serves it.
 - ⏳ Smarter "unused dependency" detection (CLI tools, plugins referenced in config files, peer dependencies).

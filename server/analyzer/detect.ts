@@ -12,6 +12,7 @@ export const LANGUAGE_BY_EXT: Record<string, string> = {
   '.cjs': 'JavaScript',
   '.vue': 'Vue',
   '.svelte': 'Svelte',
+  '.astro': 'Astro',
   '.py': 'Python',
   '.go': 'Go',
   '.rs': 'Rust',
@@ -63,6 +64,7 @@ export const CODE_LANGUAGES = new Set([
   'JavaScript',
   'Vue',
   'Svelte',
+  'Astro',
   'Python',
   'Go',
   'Rust',
@@ -477,49 +479,125 @@ export function detectManifests(files: RepoFile[]): ManifestInfo {
 /* Entry points                                                             */
 /* ---------------------------------------------------------------------- */
 
+/**
+ * Entry points, scored rather than merely matched.
+ *
+ * A repository usually has one place execution starts, and a monorepo has one per package.
+ * Listing every file that looks vaguely like an entry ("32 candidate entry points") is worse
+ * than useless, so candidates are scored, the best one per package is kept as primary, and
+ * the rest are dropped below a cap.
+ */
+
+/** Confidence that a path is where execution starts. Higher wins. */
+const enum EntryScore {
+  Manifest = 100, // package.json "main"/"bin"/start script, [[bin]] target
+  Framework = 90, // a framework's documented root (Next.js app/layout, SvelteKit root layout)
+  RootConvention = 70, // main.rs / main.go / Program.cs at a package root
+  Convention = 50, // conventional name deeper in the tree
+  Content = 30, // looks like one: listen(), createRoot(), func main()
+}
+
+interface EntryCandidate {
+  path: string
+  score: number
+  /** Package directory this entry belongs to ('' for the repository root). */
+  pkg: string
+}
+
 const P = '(?:[^/]+/){0,2}' // up to two leading folders (backend/app/main.py, apps/web/server.ts)
-const ENTRY_NAME_PATTERNS: RegExp[] = [
-  new RegExp(`^${P}(main|app|server|cli)\\.(ts|tsx|js|jsx|mjs|cjs)$`),
-  /^(src\/|(apps|packages|services)\/[^/]+\/(src\/)?)?index\.(ts|tsx|js|jsx|mjs|cjs)$/,
-  new RegExp(`^${P}(main|app|server|manage|cli|__main__|wsgi|asgi)\\.py$`),
+
+/** Conventional entry names, relative to a package root. */
+const ROOT_CONVENTIONS: RegExp[] = [
+  /^(src\/)?(main|index|app|server|cli)\.(ts|tsx|js|jsx|mjs|cjs)$/,
+  /^(src\/)?(main|app|server|manage|cli|__main__|wsgi|asgi)\.py$/,
   /^(cmd\/[^/]+\/)?main\.go$/,
+  /^main\.go$/,
   /^src\/(main|lib)\.rs$/,
-  /(^|\/)Program\.cs$/,
-  /(^|\/)Startup\.cs$/,
-  /(^|\/)(Main|Application)\.(java|kt)$/,
+  /^Program\.cs$/,
   /^config\.ru$/,
   /^(public\/)?index\.php$/,
   /^artisan$/,
-  /^(src\/)?app\/(layout|page)\.(tsx|jsx|ts|js)$/,
-  /^(src\/)?pages\/_app\.(tsx|jsx)$/,
-  /^(src\/)?main\.(ts|js)$/,
   /^lib\/main\.dart$/,
 ]
 
-export function detectEntryPoints(files: RepoFile[], hints: string[]): string[] {
+/** Conventional names anywhere (weaker than the same name at a package root). */
+const DEEP_CONVENTIONS: RegExp[] = [
+  new RegExp(`^${P}(main|app|server|cli)\\.(ts|tsx|js|jsx|mjs|cjs)$`),
+  new RegExp(`^${P}(main|app|server|manage|cli|__main__|wsgi|asgi)\\.py$`),
+  /(^|\/)Program\.cs$/,
+  /(^|\/)Startup\.cs$/,
+  /(^|\/)(Main|Application)\.(java|kt)$/,
+  /(^|\/)main\.rs$/,
+]
+
+/** Framework roots: the file a framework itself treats as the top of the application. */
+const FRAMEWORK_ROOTS: RegExp[] = [
+  /^(src\/)?app\/layout\.(tsx|jsx|ts|js)$/, // Next.js app router
+  /^(src\/)?pages\/_app\.(tsx|jsx|ts|js)$/, // Next.js pages router
+  /^(src\/)?routes\/\+layout\.svelte$/, // SvelteKit
+  /^(src\/)?App\.(vue|svelte)$/,
+  /^(src\/)?app\.(vue|svelte)$/,
+  /^(src\/)?layouts\/default\.vue$/, // Nuxt
+  /^(src\/)?pages\/index\.(astro|vue|tsx|jsx)$/,
+]
+
+const ENTRY_NOISE =
+  /(^|\/)[_.]?(examples?|samples?|demos?|docs?|tests?|__tests__|spec|fixtures?|benchmarks?|bench|scripts?|tools?|github|node_modules)\//i
+/** A test file is never the way into an application, whatever it is called. */
+const TEST_FILE =
+  /(\.(test|spec)\.[cm]?[jt]sx?|_test\.(go|py|rb|rs|ex)|Tests?\.cs|Test\.(java|kt))$|(^|\/)test_[^/]+\.py$|(^|\/)conftest\.py$/
+
+/** How many entry points are worth showing before the list stops being a signal. */
+export const MAX_ENTRY_POINTS = 8
+
+/**
+ * @param packageDirs directories that declare a package, deepest first. Entries are scored
+ *   relative to the package they sit in, so `crates/core/main.rs` counts as a root entry.
+ */
+export function detectEntryPoints(
+  files: RepoFile[],
+  hints: string[],
+  packageDirs: string[] = [],
+): string[] {
   const paths = new Set(files.map((f) => f.path))
-  const entries = new Set<string>()
+  const candidates = new Map<string, EntryCandidate>()
+  const roots = [...packageDirs].sort((a, b) => b.length - a.length)
+  const packageOf = (p: string) => roots.find((d) => p.startsWith(d + '/')) ?? ''
+  const relative = (p: string, pkg: string) => (pkg ? p.slice(pkg.length + 1) : p)
+
+  const add = (path: string, score: number) => {
+    const existing = candidates.get(path)
+    if (existing && existing.score >= score) return
+    candidates.set(path, { path, score, pkg: packageOf(path) })
+  }
+
   for (const h of hints) {
-    if (paths.has(h)) entries.add(h)
+    if (paths.has(h)) add(h, EntryScore.Manifest)
     else {
-      // package.json "main" may point at a build output; try a source equivalent.
+      // package.json "main" may point at build output; try the source equivalent.
       const alt = h.replace(/^(dist|build|lib|out)\//, 'src/').replace(/\.js$/, '.ts')
-      if (paths.has(alt)) entries.add(alt)
+      if (paths.has(alt)) add(alt, EntryScore.Manifest)
     }
   }
-  const NOISE =
-    /(^|\/)(examples?|samples?|docs?|tests?|__tests__|spec|fixtures?|benchmarks?|scripts?|\.github)\//
+
   for (const p of paths) {
-    if (NOISE.test(p)) continue
-    if (ENTRY_NAME_PATTERNS.some((re) => re.test(p))) entries.add(p)
+    if (ENTRY_NOISE.test(p) || TEST_FILE.test(p)) continue
+    const pkg = packageOf(p)
+    const rel = relative(p, pkg)
+    if (FRAMEWORK_ROOTS.some((re) => re.test(rel))) add(p, EntryScore.Framework)
+    else if (ROOT_CONVENTIONS.some((re) => re.test(rel))) add(p, EntryScore.RootConvention)
+    else if (DEEP_CONVENTIONS.some((re) => re.test(p))) add(p, EntryScore.Convention)
   }
-  // Content-based signals: "if __name__ == '__main__'", listen(), createRoot()
+
+  // Content signals: what the file actually does, for projects that follow no convention.
   for (const f of files) {
-    if (!f.content || entries.has(f.path)) continue
-    if (NOISE.test(f.path)) continue
+    if (!f.content || candidates.has(f.path)) continue
+    if (ENTRY_NOISE.test(f.path) || TEST_FILE.test(f.path)) continue
     const lang = languageOf(f.path)
     if (!lang || !CODE_LANGUAGES.has(lang)) continue
-    if (f.path.split('/').length > 3) continue
+    const pkg = packageOf(f.path)
+    // Deep files are rarely the way in, unless they sit near a package root.
+    if (relative(f.path, pkg).split('/').length > 3) continue
     const c = f.content
       .split('\n')
       .filter((line) => !/^\s*(\*|\/\/|#|\/\*)/.test(line))
@@ -532,10 +610,31 @@ export function detectEntryPoints(files: RepoFile[], hints: string[]): string[] 
       /static\s+(async\s+)?(void|Task|int)\s+Main\s*\(/.test(c) ||
       /WebApplication\.CreateBuilder/.test(c)
     ) {
-      entries.add(f.path)
+      add(f.path, EntryScore.Content)
     }
   }
-  return [...entries].sort()
+
+  // Keep the best entry for each package, then fill up to the cap with the next best
+  // overall — so a monorepo shows one way in per app rather than every index.ts it owns.
+  const ranked = [...candidates.values()].sort(
+    (a, b) =>
+      b.score - a.score ||
+      a.path.split('/').length - b.path.split('/').length ||
+      a.path.localeCompare(b.path),
+  )
+  const chosen: string[] = []
+  const seenPackages = new Set<string>()
+  for (const c of ranked) {
+    if (seenPackages.has(c.pkg)) continue
+    seenPackages.add(c.pkg)
+    chosen.push(c.path)
+  }
+  for (const c of ranked) {
+    if (chosen.length >= MAX_ENTRY_POINTS) break
+    if (!chosen.includes(c.path) && c.score >= EntryScore.RootConvention) chosen.push(c.path)
+  }
+  // Ranked, not alphabetical: callers show the first as the primary way in.
+  return chosen.slice(0, MAX_ENTRY_POINTS)
 }
 
 /* ---------------------------------------------------------------------- */
@@ -621,8 +720,10 @@ export function detectRoutes(files: RepoFile[]): RouteInfo[] {
   for (const f of files) {
     if (!f.content) continue
     // Next.js / SvelteKit / Nuxt file-based API routes
+    // Anchored anywhere in the path, not just at the repository root, so a Next.js or
+    // SvelteKit app that lives under apps/web/ in a monorepo still reports its routes.
     const fileRoute = f.path.match(
-      /^(?:src\/)?(?:app|pages|routes|server)\/api\/(.+?)\/?(?:route|index|\+server)?\.(?:ts|js|tsx|jsx)$/,
+      /(?:^|\/)(?:app|pages|routes|server)\/api\/(.+?)\/?(?:route|index|\+server)?\.(?:ts|js|tsx|jsx|mjs)$/,
     )
     if (fileRoute) {
       const p =
