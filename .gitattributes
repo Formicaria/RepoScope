@@ -1,0 +1,13 @@
+# Line endings are normalised to LF in the repository and in the working tree on every
+# platform. Without this a Windows checkout rewrites every file with CRLF, and git then
+# reports the whole tree as modified — 15,000 changed lines that are not changes.
+* text=auto eol=lf
+
+# Binary files must never be touched by that normalisation.
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.wasm binary
