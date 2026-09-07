@@ -40,9 +40,11 @@ Make the analysis right more often, and make it obvious _why_ the map looks the 
 
 ## 0.35 — Review ✅
 
+Shipped in 0.4.0; 0.5.0 fixed a redaction leak that could print the credential a finding was meant to hide, and cut false positives on Rust and on doc comments.
+
 - ✅ **Code review pass.** 37 rules with file, line, consequence and a specific fix, across security, reliability, maintainability, craft, accessibility, testing and documentation.
-- ⏳ **Per-rule suppression.** A `.reposcope.json` to switch off a rule or a path, so a team can tune the review to its own standards.
-- ⏳ **More languages in the craft rules.** The structural rules are strongest on TypeScript, JavaScript and Python; Go, Rust and C# get the line-based subset.
+- ✅ **Per-rule suppression.** `.reposcope.json` switches off rules, ignores paths and overrides severities. A malformed config is reported rather than obeyed, and the UI and CLI always say when a review was tuned and by how much.
+- 🚧 **More languages in the craft rules.** Structural extraction now works for all nine parsed languages — C#, Java, Kotlin, Ruby, PHP and Rust were silently yielding nothing, so most rules never fired on them. Remaining gap: several rules still encode JavaScript and Python idioms even where the syntax tree is available.
 - ⏳ **Dependency vulnerabilities.** Cross-reference the lockfile against an advisory database.
 - 💡 **Rule confidence from data.** Track which findings users dismiss and demote the noisy rules.
 
