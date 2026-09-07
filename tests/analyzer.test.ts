@@ -458,6 +458,89 @@ describe('entry points', () => {
   })
 })
 
+describe('health score calibration', () => {
+  const f = (path: string, content = ''): RepoFile => ({ path, size: content.length, content })
+
+  /**
+   * `pairs` modules, half of them wired into a two-module import cycle. Cycles that cross a
+   * module boundary are the ones reported as defects; a cycle inside one module is reported
+   * at `info`, which the test below relies on.
+   */
+  const repoOf = (pairs: number, cyclic: boolean): RepoFile[] => {
+    const n = pairs * 2
+    const files: RepoFile[] = [
+      f('README.md', '# app\n\nA test fixture.'),
+      f('.gitignore', 'node_modules'),
+      f('package.json', JSON.stringify({ name: 'app', main: 'src/index.ts' })),
+      f(
+        'src/index.ts',
+        Array.from({ length: n }, (_, i) => `import './m${i}/a'`).join('\n') + '\nconsole.log(1)',
+      ),
+    ]
+    for (let i = 0; i < n; i++) {
+      const partner = i % 2 === 0 ? i + 1 : i - 1
+      const back = cyclic && i % 2 === 1 ? `import '../m${partner}/a'\n` : ''
+      files.push(
+        f(`src/m${i}/a.ts`, `import '../m${partner}/b'\nexport const a${i} = 1`),
+        f(`src/m${i}/b.ts`, `${back}export const b${i} = 2`),
+        f(`tests/m${i}.test.ts`, `import '../src/m${i}/a'\ntest('x', () => {})`),
+      )
+    }
+    return files
+  }
+
+  const delta = (r: Awaited<ReturnType<typeof analyzeRepository>>, signal: string) =>
+    r.health.breakdown.find((b) => b.signal === signal)?.delta ?? 0
+
+  /**
+   * The score must measure quality, not size. Before the penalties were expressed as rates,
+   * the same proportion of the same defect cost a large repository far more than a small
+   * one: health correlated -0.73 with file count across the benchmark corpus, and the two
+   * largest projects in it scored lowest.
+   */
+  it('charges the same for the same proportion of defects at any size', async () => {
+    const small = await analyzeRepository(repo, repoOf(2, true))
+    const large = await analyzeRepository(repo, repoOf(10, true))
+    expect(large.stats.modules).toBeGreaterThan(small.stats.modules * 3)
+    expect(delta(small, 'Circular dependencies')).toBeLessThan(0)
+    expect(delta(large, 'Circular dependencies')).toBeLessThan(0)
+    // Five times the modules, the same share of them cyclic: within a point of each other.
+    expect(
+      Math.abs(delta(large, 'Circular dependencies') - delta(small, 'Circular dependencies')),
+    ).toBeLessThanOrEqual(1)
+  })
+
+  it('charges more when a larger share of the repository is affected', async () => {
+    const clean = await analyzeRepository(repo, repoOf(6, false))
+    const cyclic = await analyzeRepository(repo, repoOf(6, true))
+    expect(delta(clean, 'Circular dependencies')).toBe(0)
+    expect(cyclic.health.score).toBeLessThan(clean.health.score)
+  })
+
+  /**
+   * `info` is how a detector says "worth mentioning, not worth holding against you".
+   * Scoring those anyway cost Vue eight points for a benchmarks directory and an SFC
+   * playground having no test files of their own.
+   */
+  it('does not score warnings the detector reported as information', async () => {
+    const withinModule = [
+      f('README.md', '# app'),
+      f('.gitignore', 'node_modules'),
+      f('package.json', JSON.stringify({ name: 'app', main: 'src/index.ts' })),
+      f('src/index.ts', "import './pair/a'\nconsole.log(1)"),
+      f('src/pair/a.ts', "import './b'\nexport const a = 1"),
+      f('src/pair/b.ts', "import './a'\nexport const b = 2"),
+      f('tests/a.test.ts', "import '../src/pair/a'\ntest('x', () => {})"),
+    ]
+    const r = await analyzeRepository(repo, withinModule)
+    const cycles = r.warnings.filter((w) => w.kind === 'circular-dependency')
+    expect(cycles.length).toBeGreaterThan(0)
+    expect(cycles.every((w) => w.severity === 'info')).toBe(true)
+    // Reported on the map, absent from the score.
+    expect(delta(r, 'Circular dependencies')).toBe(0)
+  })
+})
+
 describe('secret findings in test fixtures', () => {
   const f = (path: string, content = ''): RepoFile => ({ path, size: content.length, content })
 

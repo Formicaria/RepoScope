@@ -105,7 +105,7 @@ Edges are stored at the **finest level** (file → file, file → integration/st
    `.reposcope.json` from the scanned repository, which can disable rules, ignore paths and
    override severities; a malformed config is reported through `ReviewSummary.configured`
    rather than obeyed, and the presence of a config is always surfaced in the UI.
-7. **Score** (`score.ts`). Start at 100, apply deltas per signal, clamp, label. The breakdown is part of the result so the UI can show it.
+7. **Score** (`score.ts`). Start at 100, apply deltas per signal, clamp, label. The breakdown is part of the result so the UI can show it. Two rules govern the deltas. Warnings the detector reported at `info` severity never score — that is what `info` means, and scoring them anyway penalised projects for a benchmarks directory having no tests of its own. And count-based penalties are expressed as rates through the `rate()` helper: `n / denominator / full` of the maximum, where `full` is the share at which a signal costs everything. Absolute counts made the score a proxy for repository size (`r = -0.73` against file count across the corpus; `npm run bench` reports that correlation on every run).
 8. **Summary** (`summary.ts`). `buildTemplateSummary` writes the prose from facts; `SummaryProvider.summarize(draft, facts)` may rewrite `headline`/`description`/`architecture`. `providerFromEnv` returns the template provider unless `REPOSCOPE_LLM_URL` and `REPOSCOPE_LLM_MODEL` are set.
 
 `analyzeRepository` yields to the event loop between stages so progress updates reach the poller.

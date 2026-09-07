@@ -28,8 +28,38 @@ export function computeHealth(input: ScoreInput): HealthScore {
     score += delta
   }
 
-  const count = (kind: Warning['kind']) => warnings.filter((w) => w.kind === kind)
+  /**
+   * Only warnings the analyzer is confident are defects count against the score. `info` is
+   * how a detector says "worth mentioning, not worth holding against you" — a benchmark
+   * directory with no tests, a cycle inside a single module, a `.env` in a test fixture.
+   * Scoring them anyway was a quiet contradiction of that contract, and it cost Vue 8 points
+   * for `sfc-playground` and `__benchmarks__` having no test files.
+   */
+  const count = (kind: Warning['kind']) =>
+    warnings.filter((w) => w.kind === kind && w.severity !== 'info')
+  const all = (kind: Warning['kind']) => warnings.filter((w) => w.kind === kind)
   const paths = files.map((f) => f.path)
+
+  // Denominators for the rate-based penalties below. A module count of zero would only
+  // happen on an empty repository, where nothing is scored anyway.
+  const moduleCount = Math.max(1, graph.modules.length)
+  const fileCount = Math.max(1, files.length)
+
+  /**
+   * A penalty from a rate rather than a count.
+   *
+   * Every count-based penalty here used to read `Math.min(cap, n * weight)`, which makes the
+   * score a proxy for repository size: a 650-file project accumulates more of everything
+   * than a 60-file one and hits the cap in category after category, whatever its quality.
+   * Measured across the corpus, score correlated -0.73 with file count. Rates are the fix:
+   * `full` is the share at which a signal is bad enough to cost the whole `max`.
+   *
+   * The thresholds below are still judgement calls, and the score is still labelled an
+   * estimate. What changed is that they are judgements about proportions, which mean the
+   * same thing in a small repository and a large one.
+   */
+  const rate = (n: number, of: number, full: number, max: number) =>
+    n === 0 ? 0 : -Math.min(max, Math.max(1, Math.round((n / of / full) * max)))
 
   // Tests
   const missing = count('missing-tests')
@@ -38,14 +68,18 @@ export function computeHealth(input: ScoreInput): HealthScore {
   else if (missing.some((w) => w.severity === 'warning'))
     apply('Tests', -12, 'Test coverage looks sparse')
   else if (missing.length)
-    apply('Tests', -Math.min(8, missing.length * 2), `${missing.length} module(s) without tests`)
+    apply(
+      'Tests',
+      rate(missing.length, moduleCount, 0.3, 8),
+      `${missing.length} of ${moduleCount} modules without tests`,
+    )
   else apply('Tests', 0, 'Tests present')
 
   // Secrets
   // Only real findings are penalised. Secrets inside test fixtures are reported at info
   // severity because committing throwaway keys and .env files there is normal and deliberate.
-  const secrets = count('exposed-secret').filter((w) => w.severity !== 'info')
-  const fixtureSecrets = count('exposed-secret').length - secrets.length
+  const secrets = count('exposed-secret')
+  const fixtureSecrets = all('exposed-secret').length - secrets.length
   if (secrets.length)
     apply(
       'Secrets',
@@ -61,8 +95,8 @@ export function computeHealth(input: ScoreInput): HealthScore {
   if (cycles.length)
     apply(
       'Circular dependencies',
-      -Math.min(15, cycles.length * 4),
-      `${cycles.length} import cycle(s)`,
+      rate(cycles.length, moduleCount, 0.15, 12),
+      `${cycles.length} import cycle(s) across ${moduleCount} modules`,
     )
   else apply('Circular dependencies', 0, 'No import cycles')
 
@@ -71,8 +105,8 @@ export function computeHealth(input: ScoreInput): HealthScore {
   if (complexity.length)
     apply(
       'Complexity',
-      -Math.min(12, complexity.length * 3),
-      `${complexity.length} complexity warning(s)`,
+      rate(complexity.length, moduleCount, 0.2, 10),
+      `${complexity.length} of ${moduleCount} modules flagged for complexity`,
     )
   else apply('Complexity', 0, 'No oversized files or modules')
 
@@ -143,12 +177,20 @@ export function computeHealth(input: ScoreInput): HealthScore {
   // Dead modules / entry clarity / large files
   const dead = count('dead-module')
   if (dead.length)
-    apply('Dead modules', -Math.min(8, dead.length * 2), `${dead.length} unreferenced module(s)`)
+    apply(
+      'Dead modules',
+      rate(dead.length, moduleCount, 0.15, 8),
+      `${dead.length} of ${moduleCount} modules unreferenced`,
+    )
   const entry = count('unclear-entry')
   if (entry.some((w) => w.severity === 'warning')) apply('Entry point', -6, 'No clear entry point')
   const large = count('large-file')
   if (large.length)
-    apply('Large files', -Math.min(6, large.length * 2), `${large.length} very large file(s)`)
+    apply(
+      'Large files',
+      rate(large.length, fileCount, 0.02, 6),
+      `${large.length} of ${fileCount} files are very large`,
+    )
 
   // Review findings move the score, but never dominate it: the warnings above already
   // cover tests, secrets, cycles and complexity, and double-counting the same weaknesses

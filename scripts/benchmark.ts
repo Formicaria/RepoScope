@@ -178,6 +178,27 @@ async function main() {
           : args[onlyIndex + 1]
         )?.split(',')
 
+  /**
+   * Pearson correlation. Used on health against file count: the score should not be a proxy
+   * for how big a repository is, and before the penalties were expressed as rates it was —
+   * r was -0.73 across this corpus, with the two largest projects scoring lowest.
+   *
+   * Ten repositories is a small sample and the interval around r is wide, so treat a change
+   * of a few hundredths as noise. It is here to catch a regression back towards -0.7.
+   */
+  function pearson(xs: number[], ys: number[]): number {
+    const n = xs.length
+    if (n < 3) return 0
+    const mean = (v: number[]) => v.reduce((a, b) => a + b, 0) / v.length
+    const mx = mean(xs)
+    const my = mean(ys)
+    const num = xs.reduce((a, x, i) => a + (x - mx) * (ys[i] - my), 0)
+    const den = Math.sqrt(
+      xs.reduce((a, x) => a + (x - mx) ** 2, 0) * ys.reduce((a, y) => a + (y - my) ** 2, 0),
+    )
+    return den === 0 ? 0 : num / den
+  }
+
   const corpus: { repos: CorpusEntry[] } = JSON.parse(
     await fs.readFile(path.join(ROOT, 'benchmarks', 'corpus.json'), 'utf8'),
   )
@@ -246,9 +267,32 @@ async function main() {
       ? round(prevTotals.unresolved / Math.max(1, prevTotals.resolved + prevTotals.unresolved))
       : undefined
 
+  const sizeBias = pearson(
+    metrics.map((m) => m.health),
+    metrics.map((m) => m.files),
+  )
+  const prevSizeBias = previous
+    ? round(
+        pearson(
+          previous.repos.map((r) => r.health),
+          previous.repos.map((r) => r.files),
+        ),
+      )
+    : undefined
+
   process.stdout.write(
     `\ncorpus: ${metrics.length} repos · ${totals.resolved} resolved imports · ${totals.edges} file edges · ${(totals.ms / 1000).toFixed(1)}s\n` +
-      `unresolved-local rate: ${fmtDelta(prevRate, rate, { lowerIsBetter: true })}\n`,
+      `unresolved-local rate: ${fmtDelta(prevRate, rate, { lowerIsBetter: true })}\n` +
+      `health size-bias: r = ${round(sizeBias)}` +
+      (prevSizeBias === undefined
+        ? ' (new)'
+        : prevSizeBias === round(sizeBias)
+          ? ''
+          : ` (was ${prevSizeBias}, ${
+              Math.abs(round(sizeBias)) < Math.abs(prevSizeBias) ? '▲ weaker' : '▼ stronger'
+            })`) +
+      `\n  correlation of health with file count. Closer to 0 is better in both directions:\n` +
+      `  a score that mostly tracks how big a repository is is not measuring its health.\n`,
   )
 
   if (!diffMode) {

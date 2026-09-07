@@ -63,7 +63,7 @@ npm start
 - **Analysis panel.** Project summary, architecture explanation, key findings, recommended next actions and the full warning list.
 - **Warnings** for unclear entry points, dead-looking modules, missing tests, duplicate functionality, excessive complexity, circular imports, exposed secrets, very large files and unused dependencies.
 - **A code review**, not just a map. 37 rules look for the things a senior engineer would raise in review — injection sinks, swallowed errors, secrets with hard-coded fallbacks, `any` used as an escape hatch, comments that restate the line below them, form fields with nothing to label them. Every finding names the file and line, explains the consequence, and says exactly what to change.
-- **Estimated health score** (0–100) from measurable signals, with the breakdown shown. It is labelled an estimate because that is what it is.
+- **Estimated health score** (0–100) from measurable signals, with the breakdown shown. Penalties are expressed as _proportions_ — the share of modules in a cycle, the share of files that are oversized — so the score does not quietly become a measure of how big the repository is. It is labelled an estimate because that is what it is.
 - **Exports.** JSON of the full data model, a Markdown architecture report (with a Mermaid diagram), and a read-only share link.
 - **Folder upload** that reads files in your browser; `node_modules`, build output and `.git` never leave your machine, and secret files are listed by name only.
 
@@ -180,7 +180,9 @@ npm run bench            # scan the corpus, write benchmarks/snapshot.json
 npm run bench -- --diff  # scan and print the delta against the committed snapshot
 ```
 
-The headline metric is the **unresolved-local rate**: the share of import specifiers that unambiguously point inside the repository (relative paths, configured aliases, workspace packages) but could not be resolved to a file. Those are always analyzer gaps, which makes the number ground truth that needs no hand labelling. It currently sits at **0.6%** across the corpus, down from 3.4% on regular expressions alone. See [benchmarks/README.md](benchmarks/README.md).
+Two metrics are tracked. The headline one is the **unresolved-local rate**: the share of import specifiers that unambiguously point inside the repository (relative paths, configured aliases, workspace packages) but could not be resolved to a file. Those are always analyzer gaps, which makes the number ground truth that needs no hand labelling. It currently sits at **0.6%** across the corpus, down from 3.4% on regular expressions alone.
+
+The second is **health size-bias**: the correlation between the health score and the repository's file count. A score that mostly tracks how big a project is is not measuring its health, and this one did — `r = -0.73`, with the two largest projects in the corpus scoring lowest of the ten. Expressing the penalties as rates rather than counts brought it to **-0.48**. Some correlation is real (large codebases do carry more debt), and with ten repositories the interval around `r` is wide, so it is there to catch a regression rather than to be driven to zero. See [benchmarks/README.md](benchmarks/README.md).
 
 ### Optional LLM summary
 

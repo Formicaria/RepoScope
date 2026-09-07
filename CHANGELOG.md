@@ -6,6 +6,39 @@ All notable changes to RepoScope are documented here. The format follows [Keep a
 
 See [ROADMAP.md](ROADMAP.md) for what is planned next.
 
+## [0.6.0] — 2026-09-07
+
+### Changed
+
+- **The health score no longer measures repository size.** Every count-based penalty read
+  `min(cap, n × weight)`, so a 650-file project accumulated more of everything than a
+  60-file one and hit the cap in category after category whatever its quality. Measured
+  across the benchmark corpus, health correlated **-0.73** with file count, and the two
+  largest projects in it — Vue and a full-stack app — scored lowest of the ten. Penalties
+  for cycles, complexity, dead modules, oversized files and untested modules are now
+  expressed as _proportions_ of the repository, bringing the correlation to **-0.48**. The
+  thresholds are still judgement calls, but they are judgements about shares, which mean the
+  same thing at any size.
+- **Warnings reported at `info` severity no longer affect the score.** `warnings.ts` already
+  documented that contract for test-fixture secrets; the score applied it only there. Vue was
+  losing eight points because a benchmarks directory and an SFC playground have no test files
+  of their own, and cycles contained within a single module were charged as if they crossed
+  a boundary.
+
+### Added
+
+- `npm run bench` reports **health size-bias** — the correlation between the health score and
+  file count — alongside the unresolved-local rate, so a regression back towards a
+  size-driven score is visible on every run rather than being discovered by inspection.
+
+### Notes
+
+Corpus scores after the change: Flask 88, Express 85, ripgrep 84, HTTPie 81, chi 74,
+realworld-express 74, Vue 61, svelte-realworld 59, fastapi-fullstack 58, Linkwarden 49.
+Some correlation with size is real — large codebases do carry more debt — and with ten
+repositories the interval around `r` is wide, so the metric exists to catch a regression,
+not to be driven to zero.
+
 ## [0.5.0] — 2026-09-05
 
 ### Fixed
