@@ -1,0 +1,104 @@
+name: Release
+
+# Builds the desktop installers and attaches them to the release for a v* tag.
+#
+# The checksum sidecars are not optional decoration: the in-app updater fetches
+# `<installer>.sha256` before the installer itself and refuses to keep a download it cannot
+# verify. A release published without them is a release nobody can auto-update to, so this
+# workflow generates one per artifact and fails if an installer came out unaccompanied.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and attach installers to'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  installers:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The tag and package.json must agree, or the updater compares against a version that
+      # was never released and either nags forever or never offers the update at all.
+      - name: Check the tag matches package.json
+        shell: bash
+        run: |
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          pkg="v$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "Tag $tag does not match package.json ($pkg)."
+            exit 1
+          fi
+
+      - run: npm run check
+
+      # Supplied as a secret so the public key is not committed. Without it the build still
+      # succeeds and every licence key reads as invalid — the safe failure, but nobody can
+      # activate, so the step says so loudly rather than passing quietly.
+      - name: Warn if no licence public key is configured
+        # The `secrets` context is not available in an `if:`, so it comes through `env`.
+        env:
+          PUBKEY: ${{ secrets.LICENCE_PUBLIC_KEY }}
+        shell: bash
+        run: |
+          if [ -z "$PUBKEY" ]; then
+            echo "::warning::LICENCE_PUBLIC_KEY is not set — this build cannot verify any licence key."
+          fi
+
+      - name: Build installer
+        shell: bash
+        env:
+          REPOSCOPE_LICENCE_PUBKEY: ${{ secrets.LICENCE_PUBLIC_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run desktop:pack
+
+      - name: Checksum every installer
+        shell: bash
+        run: |
+          cd release
+          shopt -s nullglob
+          found=0
+          for f in *.exe *.dmg *.AppImage *.deb; do
+            found=1
+            if command -v sha256sum >/dev/null; then
+              sha256sum "$f" | awk '{print $1"  "$2}' > "$f.sha256"
+            else
+              shasum -a 256 "$f" | awk '{print $1"  "$2}' > "$f.sha256"
+            fi
+            echo "$f -> $(cat "$f.sha256")"
+          done
+          if [ "$found" = "0" ]; then
+            echo "No installer was produced, so there is nothing to publish."
+            exit 1
+          fi
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          cd release
+          shopt -s nullglob
+          gh release upload "$tag" *.exe *.dmg *.AppImage *.deb *.sha256 --clobber

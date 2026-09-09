@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { ScanResult } from '../../shared/types'
 import { downloadText, toJson, toMarkdown } from '../lib/export'
 import type { Settings } from '../lib/storage'
+import { DesktopSettings } from './DesktopSettings'
 import { Button, Dialog } from './ui'
 
 export function ExportDialog({
@@ -140,7 +141,8 @@ export function SettingsDialog({
             />
           </div>
         </div>
-        <p className="text-faint text-[11.5px]">Settings are stored in this browser only.</p>
+        <DesktopSettings />
+        <p className="text-faint text-[11.5px]">Map settings are stored on this device only.</p>
       </div>
     </Dialog>
   )

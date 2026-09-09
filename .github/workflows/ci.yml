@@ -37,3 +37,27 @@ jobs:
       - name: Remove the optional grammars
         run: rm -rf node_modules/web-tree-sitter node_modules/tree-sitter-wasms
       - run: npm test
+
+  desktop:
+    name: Desktop shell smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run desktop:compile
+      # Launches the real Electron shell, which reports whether the preload bridge answered,
+      # the embedded analyzer served /api/health, the UI rendered and a junk licence key was
+      # rejected. Compiling proves none of that.
+      - name: Launch and self-report
+        run: xvfb-run -a npx electron dist-electron/desktop/main.js --no-sandbox --smoke --smoke-shot=desktop-smoke.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-smoke
+          path: desktop-smoke.png
+          if-no-files-found: ignore

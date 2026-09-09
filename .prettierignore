@@ -7,3 +7,5 @@ benchmarks/snapshot.json
 
 .heldout/
 .bench-cache/
+dist-electron/
+release/

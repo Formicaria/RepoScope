@@ -48,6 +48,14 @@ Shipped in 0.4.0; 0.5.0 fixed a redaction leak that could print the credential a
 - ⏳ **Dependency vulnerabilities.** Cross-reference the lockfile against an advisory database.
 - 💡 **Rule confidence from data.** Track which findings users dismiss and demote the noisy rules.
 
+## 0.8 — Desktop ✅
+
+- ✅ **Desktop application** hosting the same analyzer in-process, on loopback, with no Node access in the window.
+- ✅ **In-app updates** from GitHub releases: checksum fetched first, re-verified at launch, applied between sessions, three modes.
+- ✅ **Offline licensing**: Ed25519-signed keys, no licence server, public key baked in at build time, extras-only gating.
+- ⏳ **Code signing.** Unsigned installers mean a SmartScreen warning on Windows and a Gatekeeper block on macOS. Needs certificates.
+- ⏳ **Bundled git**, or a first-run prompt, so URL scanning works on a machine without it.
+
 ## 0.3 — Bigger repositories, faster
 
 - ⏳ **Persist scans** in SQLite (results, not source) so share links survive restarts and re-scans can diff.

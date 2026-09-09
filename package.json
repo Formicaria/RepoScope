@@ -1,6 +1,6 @@
 {
   "name": "reposcope",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Paste a repository, scan it, and immediately understand how the software is put together.",
   "private": true,
   "license": "MIT",
@@ -30,14 +30,18 @@
     "dev:api": "tsx watch server/index.ts",
     "build": "vite build",
     "start": "NODE_ENV=production tsx server/index.ts",
-    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.desktop.json --noEmit",
     "test": "vitest run",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "demo:generate": "tsx scripts/generate-demo.ts",
     "scan:local": "tsx scripts/scan-local.ts",
     "check": "npm run format:check && npm run typecheck && npm run test",
-    "bench": "tsx scripts/benchmark.ts"
+    "bench": "tsx scripts/benchmark.ts",
+    "desktop:compile": "tsc -p tsconfig.electron.json && tsx scripts/embed-public-key.ts",
+    "desktop:dev": "npm run build && npm run desktop:compile && electron dist-electron/desktop/main.js",
+    "desktop:pack": "npm run build && npm run desktop:compile && electron-builder --publish never",
+    "licence": "tsx scripts/licence.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.1.1",
@@ -49,8 +53,8 @@
     "zod": "^4.5.4"
   },
   "optionalDependencies": {
-    "web-tree-sitter": "^0.24.7",
-    "tree-sitter-wasms": "^0.1.13"
+    "tree-sitter-wasms": "^0.1.13",
+    "web-tree-sitter": "^0.24.7"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -60,6 +64,8 @@
     "@types/react-dom": "^19.2.5",
     "@vitejs/plugin-react": "^6.1.1",
     "concurrently": "^10.0.5",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
     "playwright": "^1.62.1",
     "prettier": "^3.9.6",
     "prettier-plugin-tailwindcss": "^0.8.1",
@@ -68,5 +74,59 @@
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"
+  },
+  "main": "dist-electron/desktop/main.js",
+  "build": {
+    "appId": "dev.formicaria.reposcope",
+    "productName": "RepoScope",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist-electron/**/*",
+      "dist/**/*",
+      "package.json",
+      "!node_modules/**/{test,tests,__tests__,docs,example,examples}/**"
+    ],
+    "extraMetadata": {
+      "main": "dist-electron/desktop/main.js"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "RepoScope-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "artifactName": "RepoScope-${version}-${arch}.${ext}",
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "artifactName": "RepoScope-${version}.${ext}",
+      "category": "Development"
+    }
   }
 }

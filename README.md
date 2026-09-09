@@ -68,6 +68,44 @@ npm start
 - **Exports.** JSON of the full data model, a Markdown architecture report (with a Mermaid diagram), and a read-only share link.
 - **Folder upload** that reads files in your browser; `node_modules`, build output and `.git` never leave your machine, and secret files are listed by name only.
 
+## Desktop app
+
+RepoScope also ships as a desktop application, so a scan is a double-click rather than two terminals.
+
+```bash
+npm run desktop:dev    # build the client, compile the shell, launch it
+npm run desktop:pack   # produce an installer in release/
+```
+
+The shell hosts the same Express analyzer the web build uses, in-process, and points a window at it — there is one analyzer and one UI, so the desktop build cannot drift from the browser build. It binds **127.0.0.1 on an ephemeral port**: an installed app listening on every interface would quietly expose a repository scanner to the local network. The window gets no Node access (`contextIsolation`, no `nodeIntegration`) and reaches the host through a preload bridge with four named methods.
+
+### Updates
+
+The app checks GitHub releases and can install them for you. Three modes, in Settings: **never check**, **ask me** (the default) and **install automatically**.
+
+What makes it safe to leave on:
+
+- The **SHA-256 sidecar is fetched before the installer**. A release that publishes no checksum is never installed automatically — RepoScope says so and points at the release page, because an updater that runs unverified binaries is a worse problem than an out-of-date app.
+- The download is **verified again at launch**, not only when it arrives. In between it sat on a disk anything with write access could reach.
+- Nothing installs mid-session; a verified download applies at the next start.
+
+Releases are built by [`.github/workflows/release.yml`](.github/workflows/release.yml) on a `v*` tag, which generates the sidecars and fails if an installer came out without one.
+
+### Licensing
+
+Everything RepoScope promises on the tin — the analyzer, the map, the review, the health score, the exports, the CLI gate — is free and stays free. A licence adds extras, listed in one table in [`desktop/features.ts`](desktop/features.ts).
+
+Keys are **Ed25519-signed statements verified offline**: no licence server, no activation call, nothing to break when you are on a plane. Issue them with:
+
+```bash
+npm run licence -- keypair                      # once; keep the private key out of the repo
+npm run licence -- issue --holder "Name" --tier pro
+```
+
+Set the public key as the `LICENCE_PUBLIC_KEY` repository secret; the release build bakes it in. A build without it treats every key as invalid — the safe direction to fail.
+
+**This is a gate, not a lock, and it is worth being plain about that.** RepoScope is MIT-licensed with public source, so anyone may fork it and delete the check, legally. The implementation is deliberately simple and readable rather than obfuscated: obfuscation would inconvenience paying customers and stop nobody.
+
 ## Commands
 
 | Command                                 | What it does                                                                      |
@@ -81,6 +119,9 @@ npm start
 | `npm run format`                        | Prettier write                                                                    |
 | `npm run scan:local -- ./some/repo`     | Analyse a folder from the terminal (`--json`, `--review`, `--fail-on=<severity>`) |
 | `npm run demo:generate -- <github url>` | Regenerate `src/data/demo.json` from a real repository                            |
+| `npm run desktop:dev`                   | Launch the desktop app from source                                                |
+| `npm run desktop:pack`                  | Build a desktop installer into `release/`                                         |
+| `npm run licence -- issue --holder X`   | Sign a licence key (see Desktop app → Licensing)                                  |
 
 ## How it works
 

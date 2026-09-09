@@ -6,6 +6,65 @@ All notable changes to RepoScope are documented here. The format follows [Keep a
 
 See [ROADMAP.md](ROADMAP.md) for what is planned next.
 
+## [0.8.0] — 2026-09-09
+
+RepoScope ships as a desktop app, with in-app updates and offline licensing.
+
+### Added
+
+- **Desktop application** (Electron). The shell hosts the same Express analyzer the web
+  build uses, in-process, and points a window at it — one analyzer, one UI, so the two
+  builds cannot drift apart. `npm run desktop:dev` to run it, `npm run desktop:pack` for an
+  installer.
+  - The analyzer binds **127.0.0.1 on an ephemeral port**. The web build listens on every
+    interface because somebody chose to run a server; an installed desktop app doing the
+    same would quietly expose a repository scanner to the local network.
+  - The window has no Node access (`contextIsolation`, no `nodeIntegration`) and reaches the
+    host through a preload bridge with four named methods rather than a general IPC channel.
+  - Missing `git` is reported in Settings as a fact about what will work — folder scanning is
+    fine without it, URL scanning needs it for the shallow clone — rather than surfacing
+    later as a failed scan with no explanation.
+- **In-app updates** against GitHub releases, following the shape Anthill uses. Three modes:
+  never check, ask me (default), install automatically.
+  - The **SHA-256 sidecar is fetched before the installer**, and a release that publishes no
+    checksum is never installed — RepoScope says so and points at the release page. An
+    updater that runs unverified binaries is a worse problem than an out-of-date app.
+  - The payload is **verified again at launch**, not only after downloading: in between it
+    sat on a disk anything with write access could reach. A staged installer that fails that
+    check is deleted along with its manifest, so the next launch does not retry it.
+  - Nothing installs mid-session, and declining the prompt is remembered for that run only —
+    a second, invisible "stop asking" would leave someone with an app that had quietly
+    stopped updating and no setting saying so.
+- **Offline licensing.** Keys are Ed25519-signed statements verified against a public key
+  baked in at build time: no licence server, no activation call, nothing to break offline.
+  `npm run licence -- keypair` and `npm run licence -- issue --holder "Name"` issue them.
+  Everything RepoScope promises — analyzer, map, review, score, exports, CLI gate — is free;
+  a licence adds extras listed in one table in `desktop/features.ts`. A build with no public
+  key configured treats every key as invalid, which is the safe direction to fail.
+  This is a gate, not a lock: the source is MIT and public, so the check is deliberately
+  simple and honest rather than obfuscated.
+- `.github/workflows/release.yml` builds installers for Windows, macOS and Linux on a `v*`
+  tag, checks the tag matches `package.json`, generates a checksum per artifact and fails if
+  an installer came out without one.
+- A `--smoke` flag on the desktop shell that launches it, exercises the preload bridge, the
+  embedded analyzer and licence rejection, reports what it found and exits. CI runs it under
+  `xvfb`, because compiling proves none of that.
+
+### Fixed
+
+- The built client was resolved as `../dist` relative to the server module, which is wrong
+  once that module is compiled into `dist-electron/` — the desktop window opened blank. The
+  candidate paths are now checked rather than assumed.
+- Desktop version reporting used `app.getVersion()`, which returns _Electron's_ version when
+  the app is not packaged. The smoke test caught it reporting `33.4.11`, which the updater
+  would have compared against the latest release and concluded RepoScope was thirty-two
+  major versions ahead of itself — silently never offering an update.
+
+### Changed
+
+- `server/index.ts` split into `server/app.ts` (`createApp()`, no port binding) and a thin
+  entry point, so the desktop build hosts the analyzer rather than shipping a copy of it.
+
 ## [0.7.0] — 2026-09-09
 
 ### Added

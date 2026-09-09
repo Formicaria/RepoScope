@@ -13,14 +13,5 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": [
-    "server",
-    "shared",
-    "scripts",
-    "tests",
-    "vite.config.ts",
-    "vitest.config.ts",
-    "desktop"
-  ],
-  "exclude": ["tests/fixtures"]
+  "include": ["desktop", "server", "shared"]
 }

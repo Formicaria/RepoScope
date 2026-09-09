@@ -12,3 +12,5 @@ dist
 
 .heldout/
 .bench-cache/
+dist-electron/
+release/
