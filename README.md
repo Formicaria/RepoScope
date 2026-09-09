@@ -63,6 +63,7 @@ npm start
 - **Analysis panel.** Project summary, architecture explanation, key findings, recommended next actions and the full warning list.
 - **Warnings** for unclear entry points, dead-looking modules, missing tests, duplicate functionality, excessive complexity, circular imports, exposed secrets, very large files and unused dependencies.
 - **A code review**, not just a map. 37 rules look for the things a senior engineer would raise in review — injection sinks, swallowed errors, secrets with hard-coded fallbacks, `any` used as an escape hatch, comments that restate the line below them, form fields with nothing to label them. Every finding names the file and line, explains the consequence, and says exactly what to change.
+- **It says what it could not see.** Some languages do not write imports an analyzer can follow — Rails autoloads rather than importing, so a Rails app resolves almost nothing. Where the graph is too sparse to judge, the structural checks are _withheld and said to be withheld_ rather than reported as clean, the score is marked `unrated`, and the architecture paragraph says it is inferring from names. "No findings" and "nothing was visible" are not the same result.
 - **Estimated health score** (0–100) from measurable signals, with the breakdown shown. Penalties are expressed as _proportions_ — the share of modules in a cycle, the share of files that are oversized — so the score does not quietly become a measure of how big the repository is. It is labelled an estimate because that is what it is.
 - **Exports.** JSON of the full data model, a Markdown architecture report (with a Mermaid diagram), and a read-only share link.
 - **Folder upload** that reads files in your browser; `node_modules`, build output and `.git` never leave your machine, and secret files are listed by name only.
@@ -104,17 +105,17 @@ Every stage is a pure function over the previous stage's output, so the parser, 
 
 ### Supported languages
 
-| Language                | Import resolution | How                                                                                                          |
-| ----------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------ |
-| TypeScript / JavaScript | ✅                | relative paths, `tsconfig`/`jsconfig` `paths` (wildcards included), Vite aliases, `$lib`, workspace packages |
-| Vue / Svelte / Astro    | ✅                | the component's script block is extracted and parsed as TypeScript                                           |
-| Python                  | ✅                | absolute, relative and `from . import module`, any project root                                              |
-| Go                      | ✅                | module-local packages, multi-module repositories                                                             |
-| Rust                    | ✅                | `mod`, `crate::`, and sibling crates in a Cargo workspace                                                    |
-| Java / Kotlin / Scala   | ✅                | resolved through the `package` each file declares                                                            |
-| C#                      | ✅                | namespace-level `using`                                                                                      |
-| Ruby, PHP, Dart, C/C++  | partial           | relative requires / includes, PHP namespaces                                                                 |
-| Everything else         | counted           | grouped by folder, no edges                                                                                  |
+| Language                | Import resolution | How                                                                                                                                                                                 |
+| ----------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TypeScript / JavaScript | ✅                | relative paths, `tsconfig`/`jsconfig` `paths` (wildcards included), Vite aliases, `$lib`, workspace packages                                                                        |
+| Vue / Svelte / Astro    | ✅                | the component's script block is extracted and parsed as TypeScript                                                                                                                  |
+| Python                  | ✅                | absolute, relative and `from . import module`, any project root                                                                                                                     |
+| Go                      | ✅                | module-local packages, multi-module repositories                                                                                                                                    |
+| Rust                    | ✅                | `mod`, `crate::`, and sibling crates in a Cargo workspace                                                                                                                           |
+| Java / Kotlin / Scala   | ✅                | resolved through the `package` each file declares                                                                                                                                   |
+| C#                      | ✅                | namespace-level `using`                                                                                                                                                             |
+| Ruby, PHP, Dart, C/C++  | partial           | relative requires / includes, PHP namespaces. Rails autoloads, so a Rails app produces almost no edges — the scan reports this rather than presenting an empty graph as a clean one |
+| Everything else         | counted           | grouped by folder, no edges                                                                                                                                                         |
 
 Files are parsed with [tree-sitter](https://tree-sitter.github.io/) grammars, so multi-line import lists, `import type`, re-exports and dynamic imports are read correctly — and imports that only appear inside comments, strings or template literals are correctly _not_ read. The grammars are an optional dependency. If they are missing or fail to load, the analyzer falls back to regular expressions — lower accuracy, no loss of function. Set `REPOSCOPE_NO_PARSE=1` to force that path.
 

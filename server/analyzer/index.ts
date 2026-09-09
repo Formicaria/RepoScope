@@ -10,6 +10,7 @@ import { buildGraph } from './graph.js'
 import { analyzeImports, workspaceDirectories } from './imports.js'
 import { parseAll } from './parse.js'
 import { runReview } from './review/index.js'
+import { computeCoverage } from './coverage.js'
 import { computeHealth } from './score.js'
 import { buildTemplateSummary, templateProvider, type SummaryProvider } from './summary.js'
 import { detectWarnings } from './warnings.js'
@@ -98,12 +99,14 @@ export async function analyzeRepository(
     rootDependencies: manifests.rootDependencies,
   })
 
+  const coverage = computeCoverage(files, languages, graph)
   const health = computeHealth({
     files,
     graph,
     warnings,
     dependencies: manifests.dependencies,
     review,
+    coverage,
   })
 
   progress('summary', 90, 'Writing architecture summary')
@@ -118,6 +121,7 @@ export async function analyzeRepository(
   const facts = {
     repository,
     diagnostics,
+    coverage,
     review,
     languages,
     frameworks: manifests.frameworks,

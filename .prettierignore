@@ -4,3 +4,6 @@ dist
 src/data/demo.json
 tests/fixtures
 benchmarks/snapshot.json
+
+.heldout/
+.bench-cache/

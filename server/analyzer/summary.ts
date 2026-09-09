@@ -238,6 +238,19 @@ export function buildTemplateSummary(facts: SummaryFacts): ProjectSummary {
   if (!nextActions.length)
     nextActions.push('Keep the module boundaries visible in the map as the project grows.')
 
+  /**
+   * When the graph is nearly empty the architecture paragraph is inference from folder
+   * names, not something the analyzer read out of the code. Saying which it is costs one
+   * sentence and is the difference between a description and a claim.
+   */
+  if (facts.coverage && facts.coverage.level !== 'full') {
+    archParts.push(
+      facts.coverage.level === 'minimal'
+        ? `Read this as a guess: only ${facts.coverage.connectedFiles} of ${facts.coverage.sourceFiles} source files could be connected by a resolved import, so the layout above comes from names and conventions rather than from imports the analyzer followed.`
+        : `Partial view: ${facts.coverage.connectedFiles} of ${facts.coverage.sourceFiles} source files are placed in the graph, so some relationships are missing.`,
+    )
+  }
+
   return {
     headline,
     description: descriptionParts.join(' '),

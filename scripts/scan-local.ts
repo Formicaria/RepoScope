@@ -61,11 +61,14 @@ const findings = (review?.suggestions ?? []).filter(
 if (!reviewOnly) {
   console.log(
     `${result.repository.name} — ${result.stats.files} files analysed in ${elapsed} ms\n` +
-      `health ${result.health.score}/100 (${result.health.label}) · ${result.stats.modules} modules · ` +
+      `health ${result.health.score}/100 (${result.health.label}${result.health.confidence === 'limited' ? ', limited visibility' : ''}) · ${result.stats.modules} modules · ` +
       `${result.stats.connections} connections · ${result.stats.warnings} warnings · ${findings.length} review findings\n` +
       `frameworks: ${result.frameworks.join(', ') || '—'}\n` +
       `entry points: ${result.entryPoints.join(', ') || '—'}\n`,
   )
+  if (result.coverage && result.coverage.level !== 'full') {
+    console.log(`  ! ${wrap(result.coverage.note, 4)}\n`)
+  }
   console.log(result.summary.headline)
   console.log(result.summary.description)
   console.log(result.summary.architecture)

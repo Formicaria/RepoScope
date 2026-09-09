@@ -6,6 +6,33 @@ All notable changes to RepoScope are documented here. The format follows [Keep a
 
 See [ROADMAP.md](ROADMAP.md) for what is planned next.
 
+## [0.7.0] — 2026-09-09
+
+### Added
+
+- **Analysis coverage.** Scanning a Rails application, RepoScope resolved _one_ import
+  across ninety-seven files — Rails autoloads, so the explicit imports the analyzer depends
+  on are never written — and then reported **82/100, "good"**, with a summary describing
+  which layer talked to which. Every graph-derived signal had scored zero because there was
+  no graph, and zero evidence was being read as zero problems.
+
+  Each scan now reports what it could see: the share of source files placed in the graph,
+  which significant languages cannot be fully resolved, and a level of `full`, `partial` or
+  `minimal`. Where coverage is `minimal`:
+
+  - the structural signals (import cycles, module cohesion, unreferenced modules) are
+    **withheld with a note saying they were withheld**, instead of scoring as clean;
+  - the health score is marked `unrated` with `confidence: 'limited'` — withholding
+    penalties _raises_ the number, so a repository the analyzer cannot see would otherwise
+    outscore one it can, and no quality word is honest in that state;
+  - the architecture paragraph says it is inferring from folder names rather than from
+    imports it followed;
+  - the sidebar, the CLI and the Markdown report all say so.
+
+  Verified on held-out repositories: a Rails app is now `unrated` with the reason given,
+  while Django, ASP.NET and every repository in the benchmark corpus are unaffected and
+  remain fully rated.
+
 ## [0.6.0] — 2026-09-07
 
 ### Changed

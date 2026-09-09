@@ -14,9 +14,12 @@ export function Sidebar({
   onShowWarnings: () => void
   onShowReview: () => void
 }) {
-  const { repository, health, languages, frameworks, stats } = result
-  const scoreColor =
-    health.score >= 85
+  const { repository, health, languages, frameworks, stats, coverage } = result
+  const limited = health.confidence === 'limited'
+  // A green 90 next to "unrated" reads as a pass. Limited visibility gets a neutral colour.
+  const scoreColor = limited
+    ? 'var(--color-muted)'
+    : health.score >= 85
       ? 'var(--color-ok)'
       : health.score >= 70
         ? 'var(--color-accent)'
@@ -78,6 +81,15 @@ export function Sidebar({
             style={{ width: `${health.score}%`, background: scoreColor }}
           />
         </div>
+        {limited && coverage && (
+          <p className="text-warn mt-2 text-[11.5px]">
+            Limited visibility — {coverage.connectedFiles} of {coverage.sourceFiles} source files
+            could be connected by a resolved import
+            {coverage.limitedLanguages.length > 0 && <> ({coverage.limitedLanguages.join(', ')})</>}
+            . The structural checks did not run, so this number rests on fewer signals and is not
+            comparable with a fully analysed project.
+          </p>
+        )}
         <details className="text-muted mt-2 text-[11.5px]">
           <summary className="hover:text-text cursor-pointer select-none">
             How it was estimated

@@ -119,9 +119,18 @@ export interface LanguageStat {
 }
 
 export interface HealthScore {
+  /**
+   * `measured` when the structural signals could run; `limited` when the import graph was
+   * too sparse to judge them, so the score rests on fewer signals than usual.
+   */
+  confidence: 'measured' | 'limited'
   /** 0..100 */
   score: number
-  label: 'excellent' | 'good' | 'fair' | 'needs attention'
+  /**
+   * `unrated` when confidence is `limited`: too little of the repository resolved for a
+   * quality word to mean anything. The number is still shown, alongside what was missed.
+   */
+  label: 'excellent' | 'good' | 'fair' | 'needs attention' | 'unrated'
   breakdown: { signal: string; delta: number; note: string }[]
 }
 
@@ -212,6 +221,26 @@ export interface ScanStats {
   warnings: number
 }
 
+/**
+ * How much of the repository the analyzer could actually place in the graph.
+ *
+ * Reported so that "no findings" can be told apart from "nothing was visible". See
+ * `server/analyzer/coverage.ts` for why this exists.
+ */
+export interface AnalysisCoverage {
+  /** Files in a language RepoScope understands. */
+  sourceFiles: number
+  /** Of those, how many are connected to at least one other file by a resolved import. */
+  connectedFiles: number
+  /** connectedFiles / sourceFiles, rounded to two places. */
+  connectedness: number
+  level: 'full' | 'partial' | 'minimal'
+  /** Significant languages here whose imports cannot be fully resolved. */
+  limitedLanguages: string[]
+  /** One paragraph, written for the user, explaining what was and was not measured. */
+  note: string
+}
+
 /** How much of the repository the analyzer actually understood. Useful for benchmarking. */
 export interface AnalysisDiagnostics {
   parsedFiles: number
@@ -240,6 +269,8 @@ export interface ScanResult {
   stats: ScanStats
   /** Optional: present for scans produced by this version of the analyzer. */
   diagnostics?: AnalysisDiagnostics
+  /** What the analyzer could and could not see. Optional so older stored scans still load. */
+  coverage?: AnalysisCoverage
   /** Actionable review findings. Optional so older stored scans still load. */
   review?: ReviewSummary
 }

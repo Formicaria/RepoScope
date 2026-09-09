@@ -89,7 +89,9 @@ export function toMarkdown(result: ScanResult): string {
   p('## Estimated health score')
   p()
   p(
-    `**${health.score}/100 — ${health.label}.** This is a heuristic estimate, not a measured quality metric.`,
+    health.confidence === 'limited'
+      ? `**${health.score}/100 — unrated.** Too little of this repository resolved into an import graph for the structural signals to run, so the number rests on fewer checks than usual and is not comparable with a fully analysed project.`
+      : `**${health.score}/100 — ${health.label}.** This is a heuristic estimate, not a measured quality metric.`,
   )
   p()
   p('| Signal | Δ | Note |')

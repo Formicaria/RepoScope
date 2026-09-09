@@ -458,6 +458,74 @@ describe('entry points', () => {
   })
 })
 
+describe('analysis coverage', () => {
+  const f = (path: string, content = ''): RepoFile => ({ path, size: content.length, content })
+
+  /**
+   * Rails autoloads: the imports every other part of the analyzer depends on are simply not
+   * written. Scanning a real Rails application, RepoScope resolved one specifier across 97
+   * files and then reported 82/100, "good", describing which layer talked to which. Every
+   * graph-derived signal had scored zero because there was no graph.
+   */
+  const RAILS: RepoFile[] = [
+    f('Gemfile', "source 'https://rubygems.org'\ngem 'rails', '~> 7.0'"),
+    f('config.ru', "require_relative 'config/environment'\nrun Rails.application"),
+    f(
+      'config/routes.rb',
+      'Rails.application.routes.draw do\n  resources :articles\n  resources :users\nend',
+    ),
+    f(
+      'app/controllers/articles_controller.rb',
+      'class ArticlesController < ApplicationController\n  def index\n    @articles = Article.all\n  end\nend',
+    ),
+    f(
+      'app/controllers/users_controller.rb',
+      'class UsersController < ApplicationController\n  def show\n    @user = User.find(params[:id])\n  end\nend',
+    ),
+    f('app/models/article.rb', 'class Article < ApplicationRecord\n  belongs_to :user\nend'),
+    f('app/models/user.rb', 'class User < ApplicationRecord\n  has_many :articles\nend'),
+    f('app/helpers/application_helper.rb', 'module ApplicationHelper\nend'),
+  ]
+
+  it('reports what it could not see instead of scoring it clean', async () => {
+    const r = await analyzeRepository(repo, RAILS)
+    expect(r.coverage?.level).toBe('minimal')
+    expect(r.coverage?.limitedLanguages).toContain('Ruby')
+    expect(r.health.confidence).toBe('limited')
+    // No quality word: withholding the structural penalties raises the number, so a
+    // repository the analyzer cannot see must not come out looking better than one it can.
+    expect(r.health.label).toBe('unrated')
+    for (const signal of ['Circular dependencies', 'Dead modules']) {
+      const entry = r.health.breakdown.find((b) => b.signal === signal)
+      expect(entry?.note).toMatch(/not measured/i)
+    }
+    // Module cohesion is withheld entirely rather than reported as a clean 0.
+    expect(r.health.breakdown.some((b) => b.signal === 'Module cohesion')).toBe(false)
+  })
+
+  it('says the architecture paragraph is inference when there is no graph', async () => {
+    const r = await analyzeRepository(repo, RAILS)
+    expect(r.summary.architecture).toMatch(/guess|conventions/i)
+  })
+
+  it('leaves a repository it can follow fully rated', async () => {
+    const files: RepoFile[] = [
+      f('package.json', JSON.stringify({ name: 'app', main: 'src/index.ts' })),
+      f('README.md', '# app'),
+      f('.gitignore', 'node_modules'),
+      f('src/index.ts', "import { a } from './a'\nimport { b } from './b'\nconsole.log(a, b)"),
+      f('src/a.ts', "import { helper } from './helper'\nexport const a = helper()"),
+      f('src/b.ts', "import { helper } from './helper'\nexport const b = helper()"),
+      f('src/helper.ts', 'export const helper = () => 1'),
+      f('tests/a.test.ts', "import { a } from '../src/a'\ntest('a', () => {})"),
+    ]
+    const r = await analyzeRepository(repo, files)
+    expect(r.coverage?.level).toBe('full')
+    expect(r.health.confidence).toBe('measured')
+    expect(r.health.label).not.toBe('unrated')
+  })
+})
+
 describe('health score calibration', () => {
   const f = (path: string, content = ''): RepoFile => ({ path, size: content.length, content })
 

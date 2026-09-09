@@ -1,4 +1,5 @@
 import type {
+  AnalysisCoverage,
   Dependency,
   HealthScore,
   RepoFile,
@@ -13,6 +14,7 @@ export interface ScoreInput {
   warnings: Warning[]
   dependencies: Dependency[]
   review?: ReviewSummary
+  coverage?: AnalysisCoverage
 }
 
 /**
@@ -21,6 +23,14 @@ export interface ScoreInput {
  */
 export function computeHealth(input: ScoreInput): HealthScore {
   const { files, graph, warnings, dependencies } = input
+
+  /**
+   * When almost nothing resolved into the graph, the structural signals are not evidence.
+   * A Rails application resolves one import across a hundred files — it autoloads — so
+   * "no cycles, no dead modules, good cohesion" would be three clean marks awarded for a
+   * graph that does not exist. Those signals are withheld and said to be withheld instead.
+   */
+  const blind = input.coverage?.level === 'minimal'
   const breakdown: HealthScore['breakdown'] = []
   let score = 100
   const apply = (signal: string, delta: number, note: string) => {
@@ -92,7 +102,8 @@ export function computeHealth(input: ScoreInput): HealthScore {
 
   // Circular dependencies
   const cycles = count('circular-dependency')
-  if (cycles.length)
+  if (blind) apply('Circular dependencies', 0, 'Not measured — too few imports resolved')
+  else if (cycles.length)
     apply(
       'Circular dependencies',
       rate(cycles.length, moduleCount, 0.15, 12),
@@ -152,7 +163,7 @@ export function computeHealth(input: ScoreInput): HealthScore {
     const b = graph.fileModule.get(e.target.replace(/^file:/, ''))
     if (a && a === b) internal++
   }
-  if (total >= 10) {
+  if (total >= 10 && !blind) {
     const cohesion = internal / total
     if (cohesion < 0.3)
       apply(
@@ -176,7 +187,8 @@ export function computeHealth(input: ScoreInput): HealthScore {
 
   // Dead modules / entry clarity / large files
   const dead = count('dead-module')
-  if (dead.length)
+  if (blind) apply('Dead modules', 0, 'Not measured — too few imports resolved')
+  else if (dead.length)
     apply(
       'Dead modules',
       rate(dead.length, moduleCount, 0.15, 8),
@@ -246,7 +258,13 @@ export function computeHealth(input: ScoreInput): HealthScore {
   }
 
   score = Math.max(0, Math.min(100, Math.round(score)))
-  const label: HealthScore['label'] =
+  let label: HealthScore['label'] =
     score >= 85 ? 'excellent' : score >= 70 ? 'good' : score >= 50 ? 'fair' : 'needs attention'
-  return { score, label, breakdown }
+  /**
+   * A quality word is a claim about the whole codebase, and withholding the structural
+   * penalties raises the number rather than lowering it — a repository the analyzer cannot
+   * see would otherwise score *better* than one it can. So it gets no word at all.
+   */
+  if (blind) label = 'unrated'
+  return { score, label, breakdown, confidence: blind ? 'limited' : 'measured' }
 }
