@@ -21,6 +21,12 @@ export interface SmokeReport {
   licence?: string
   features?: string[]
   junkKeyRejected?: boolean
+  /**
+   * Whether Settings — and the licence box inside it — can be reached on a fresh launch,
+   * before any scan. It could not in 0.8.0: the button lived only in the map header, so a
+   * newly installed app had nowhere to enter a licence key or change update behaviour.
+   */
+  settingsReachable?: boolean
   /** A real scan, run through the packaged app's own API. */
   scanned?: boolean
   scanError?: string
@@ -48,6 +54,13 @@ async function probe(): Promise<SmokeReport> {
   const licence = await rs.licence.status()
   const rejected = await rs.licence.set('not-a-real-key')
   const health = await fetch('/api/health').then((r: any) => r.json())
+
+  // Settings, from the landing page, with no scan first.
+  document.querySelector('[aria-label="Settings"]')?.click()
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  const settingsReachable = !!document.querySelector('input[aria-label="Licence key"]')
+  document.querySelector('[aria-label="Close"]')?.click()
+  await new Promise((resolve) => setTimeout(resolve, 200))
 
   const files = [
     { path: 'package.json', size: 40, content: '{"name":"probe","main":"src/index.ts"}' },
@@ -81,6 +94,7 @@ async function probe(): Promise<SmokeReport> {
     licence: licence.status.state,
     features: Object.keys(licence.features),
     junkKeyRejected: rejected.status.state === 'invalid' && rejected.saved === false,
+    settingsReachable,
     scanned: !!scan.result,
     scanError: scan.error,
     parsedFiles: diagnostics?.parsedFiles,
@@ -99,6 +113,7 @@ export function smokePassed(report: SmokeReport | undefined): boolean {
     report.apiHealth &&
     report.scanButton &&
     report.scanned &&
-    report.junkKeyRejected
+    report.junkKeyRejected &&
+    report.settingsReachable
   )
 }

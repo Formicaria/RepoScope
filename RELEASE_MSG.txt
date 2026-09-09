@@ -1,59 +1,30 @@
-RepoScope 0.8.0 — the desktop app
+RepoScope 0.8.1 — the window looks like the app
 
-Paste a repository, scan it, understand how the software is put together — now as an
-application rather than two terminals.
+Fixes the two things that were wrong with the first desktop build.
 
-## Install
+## Fixed
 
-Download the installer for your platform below. They are not code-signed yet, so the first
-launch needs one extra click:
+Settings could not be reached before the first scan. The button lived only in the map
+header, so a freshly installed app had nowhere to enter a licence key or change how updates
+behave until you had scanned something first — backwards, since activating is the first
+thing you do after installing. It is now in the landing header too, and the smoke test
+opens it from a cold start and checks the licence box is there.
 
-- Windows: "Windows protected your PC" → More info → Run anyway. Installs per-user, no
-  administrator prompt.
-- macOS: right-click the app → Open, then confirm.
-- Linux: chmod +x the AppImage and run it.
+## Changed
 
-Every installer has a .sha256 beside it. Checking it is one command, and it is the only
-thing standing in for a signature until certificates are sorted:
+The window wears the app's own header instead of native chrome. The
+File/Edit/View/Window/Help menu bar is gone on Windows and Linux: noise above a
+single-window app with nothing to put in it, sitting on top of the app's own header. macOS
+keeps a minimal menu because there it is not optional — the clipboard shortcuts are wired
+through the Edit menu and stop working in text fields without it.
 
-    sha256sum -c RepoScope-Setup-0.8.0.exe.sha256
+On Windows and macOS the native title bar is hidden and the header acts as one: drag it to
+move the window, with the real minimise/maximise/close buttons overlaid on Windows and the
+traffic lights inset on macOS. Linux keeps its native decorations, because hiding the title
+bar there removes the window controls entirely rather than overlaying them.
 
-`git` is worth having on your PATH: scanning a GitHub URL shallow-clones it. Scanning a
-folder works without it, and RepoScope says so in Settings rather than letting a scan fail
-with no explanation.
+## Updating
 
-## What is in it
-
-The shell hosts the same analyzer the web build uses, in-process, and points a window at
-it — one analyzer, one UI, so the two builds cannot drift apart. It binds 127.0.0.1 on an
-ephemeral port rather than every interface, and the window has no Node access.
-
-Updates check GitHub releases, with three modes in Settings: never check, ask me (the
-default), install automatically. The parts worth knowing:
-
-- The SHA-256 sidecar is fetched BEFORE the installer, and a release publishing no checksum
-  is never installed — the app tells you and points at the release page instead.
-- The download is verified AGAIN at launch, not only when it arrives. In between it sat on a
-  disk anything with write access could reach.
-- Nothing installs mid-session.
-
-Licensing is Ed25519 signatures verified offline — no licence server, no activation call,
-nothing to break when you have no network. Everything RepoScope promises stays free: the
-analyzer, the map, the 37-rule review, the health score, the exports and the CLI gate. A
-licence adds extras, listed in one table in the source.
-
-This is a gate, not a lock, and the code says so: RepoScope is MIT-licensed with public
-source, so anyone may fork it and remove the check. The implementation is deliberately
-simple rather than obfuscated, because obfuscation would inconvenience the people who pay
-and stop nobody.
-
-## Also since 0.7.0
-
-Nothing in the analyzer changed in this release. 0.6.0 stopped the health score measuring
-repository size, and 0.7.0 taught it to say what it could not see rather than scoring an
-invisible codebase as clean — both are in the changelog.
-
-## Known limitations
-
-- No code signing, hence the warnings above.
-- No bundled git; URL scanning needs it installed.
+If you are on 0.8.0 with updates set to "ask me" or "install automatically", this arrives on
+its own — the download is checked against the SHA-256 published below before it is kept.
+Otherwise the installers are attached to this release, with a .sha256 beside each.

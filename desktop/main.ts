@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import { spawn } from 'node:child_process'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
@@ -334,7 +334,68 @@ function registerIpc() {
   ipcMain.handle('app:open-releases', () => shell.openExternal(RELEASES_PAGE))
 }
 
+/**
+ * The application menu.
+ *
+ * Windows and Linux get none: a File/Edit/View/Window/Help bar above a single-window app
+ * with nothing to put in it is noise, and it sat on top of the app's own header.
+ *
+ * macOS gets a minimal one, because there the menu is not optional — the clipboard
+ * accelerators (Cmd-C/V/X/A) are wired through the Edit menu's roles, and without it they
+ * stop working in text fields. Same reason `selectAll` and `quit` are here rather than
+ * being left to the platform.
+ */
+function installMenu() {
+  if (process.platform !== 'darwin') {
+    Menu.setApplicationMenu(null)
+    return
+  }
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      { role: 'appMenu' },
+      { role: 'editMenu' },
+      {
+        label: 'View',
+        submenu: [
+          { role: 'reload' },
+          { role: 'togglefullscreen' },
+          { type: 'separator' },
+          { role: 'resetZoom' },
+          { role: 'zoomIn' },
+          { role: 'zoomOut' },
+        ],
+      },
+      { role: 'windowMenu' },
+      {
+        role: 'help',
+        submenu: [
+          {
+            label: 'RepoScope on GitHub',
+            click: () => void shell.openExternal(`https://github.com/${REPO}`),
+          },
+          {
+            label: 'Release notes',
+            click: () => void shell.openExternal(RELEASES_PAGE),
+          },
+        ],
+      },
+    ]),
+  )
+}
+
 async function createWindow(url: string) {
+  /**
+   * The window wears the app's own header instead of a native title bar.
+   *
+   * Windows gets `titleBarOverlay`, which keeps the real minimise/maximise/close buttons —
+   * drawn by the OS on top of our header — so the window still behaves like a window; the
+   * header reserves space for them (see `[data-titlebar-inset]` in index.css). macOS gets
+   * `hiddenInset`, which insets the traffic lights on the left.
+   *
+   * Linux keeps its native decorations. There, a hidden title bar means no window controls
+   * at all rather than overlaid ones, so hiding it would leave no way to close the window
+   * except through the window manager.
+   */
   window = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -343,6 +404,14 @@ async function createWindow(url: string) {
     backgroundColor: '#0b0d10',
     title: 'RepoScope',
     show: false,
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 16, y: 15 } }
+      : process.platform === 'win32'
+        ? {
+            titleBarStyle: 'hidden' as const,
+            titleBarOverlay: { color: '#11141a', symbolColor: '#8f98a3', height: 48 },
+          }
+        : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -376,6 +445,7 @@ if (!app.requestSingleInstanceLock()) {
     }
 
     registerIpc()
+    installMenu()
     const url = await startAnalyzer()
     await createWindow(url)
 

@@ -110,7 +110,7 @@ export function MapView({
 
   return (
     <div className="flex h-full flex-col">
-      <header className="border-border bg-surface flex h-12 shrink-0 items-center gap-2 border-b px-3">
+      <header className="app-drag border-border bg-surface flex h-12 shrink-0 items-center gap-2 border-b px-3">
         <button
           className="text-muted hover:bg-surface-2 mr-1 flex h-8 w-8 items-center justify-center rounded lg:hidden"
           onClick={() => setSidebarOpen((v) => !v)}

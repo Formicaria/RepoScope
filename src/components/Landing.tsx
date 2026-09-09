@@ -1,6 +1,8 @@
 import { useRef, useState, type FormEvent } from 'react'
 import type { ScanResult } from '../../shared/types'
 import { Button, Wordmark } from './ui'
+import { SettingsDialog } from './Dialogs'
+import { loadSettings, saveSettings, type Settings } from '../lib/storage'
 
 export interface LandingProps {
   onScanUrl: (url: string) => void
@@ -23,6 +25,17 @@ export function Landing({
 }: LandingProps) {
   const [url, setUrl] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
+  /**
+   * Settings has to be reachable before the first scan. It used to live only in the map
+   * header, which meant a freshly installed desktop app had nowhere to enter a licence key
+   * or change how updates behave until you had scanned something first.
+   */
+  const [showSettings, setShowSettings] = useState(false)
+  const [settings, setSettings] = useState<Settings>(() => loadSettings())
+  const changeSettings = (next: Settings) => {
+    setSettings(next)
+    saveSettings(next)
+  }
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -31,17 +44,40 @@ export function Landing({
 
   return (
     <div className="flex min-h-full flex-col">
-      <header className="flex h-14 items-center justify-between px-6">
+      <header className="app-drag flex h-14 items-center justify-between px-6">
         <Wordmark />
-        <a
-          className="text-muted hover:text-text text-[12.5px]"
-          href="https://github.com"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Works with public GitHub repositories
-        </a>
+        <div className="no-drag flex items-center gap-3">
+          <a
+            className="text-muted hover:text-text hidden text-[12.5px] sm:inline"
+            href="https://github.com"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Works with public GitHub repositories
+          </a>
+          <Button variant="ghost" onClick={() => setShowSettings(true)} aria-label="Settings">
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+            >
+              <circle cx="8" cy="8" r="2.2" />
+              <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" />
+            </svg>
+            <span className="hidden sm:inline">Settings</span>
+          </Button>
+        </div>
       </header>
+      {showSettings && (
+        <SettingsDialog
+          settings={settings}
+          onChange={changeSettings}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
       <main className="fade-in mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center px-6 pb-24">
         <h1 className="text-[34px] leading-[1.15] font-semibold tracking-tight text-balance sm:text-[40px]">
           Paste a repository. See how the software is put together.

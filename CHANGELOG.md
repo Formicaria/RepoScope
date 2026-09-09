@@ -6,6 +6,29 @@ All notable changes to RepoScope are documented here. The format follows [Keep a
 
 See [ROADMAP.md](ROADMAP.md) for what is planned next.
 
+## [0.8.1] — 2026-09-09
+
+### Fixed
+
+- **Settings could not be reached before the first scan.** The button lived only in the map
+  header, so a freshly installed desktop app had nowhere to enter a licence key or change
+  how updates behave until you had scanned something — which is exactly backwards, since
+  activating is the first thing someone does after installing. It is now in the landing
+  header too, and the smoke test opens it from a cold start and checks the licence box is
+  there, so this cannot regress quietly.
+
+### Changed
+
+- **The desktop window wears the app's own header instead of native chrome.** The
+  File/Edit/View/Window/Help menu bar is gone on Windows and Linux: it was noise above a
+  single-window app with nothing to put in it, and it sat on top of the app's own header.
+  macOS keeps a minimal menu because there it is not optional — the clipboard accelerators
+  are wired through the Edit menu's roles and stop working in text fields without it.
+- Windows and macOS hide the native title bar and let the header act as one (drag to move,
+  with the real window controls overlaid on Windows and the traffic lights inset on macOS).
+  Linux keeps its native decorations: hiding the title bar there removes the window controls
+  altogether rather than overlaying them, which would leave no way to close the window.
+
 ## [0.8.0] — 2026-09-09
 
 RepoScope ships as a desktop app, with in-app updates and offline licensing.
