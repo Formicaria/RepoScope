@@ -9,6 +9,7 @@ import { verifyLicence } from './license.js'
 import { FEATURES, granted } from './features.js'
 import { readSettings, writeSettings } from './settings.js'
 import { appVersion } from './version.js'
+import { PROBE_SOURCE, smokePassed, type SmokeReport } from './smoke.js'
 import {
   clearStaged,
   compareVersions,
@@ -383,35 +384,13 @@ if (!app.requestSingleInstanceLock()) {
     // headless container) can tell the shell actually works, rather than only that it
     // compiles.
     if (process.argv.includes('--smoke')) {
-      await window!.webContents
-        .executeJavaScript(`document.querySelector('[aria-label=\\'Settings\\']')?.click()`)
-        .catch(() => {})
-      const report = await window!.webContents.executeJavaScript(`(async () => {
-        const rs = window.reposcope
-        if (!rs) return { bridge: false }
-        const info = await rs.info()
-        const licence = await rs.licence.status()
-        const rejected = await rs.licence.set('not-a-real-key')
-        const health = await fetch('/api/health').then((r) => r.json())
-        return {
-          bridge: rs.desktop === true,
-          version: info.version,
-          updateMode: info.updateMode,
-          git: info.git,
-          apiHealth: health.ok === true,
-          scanButton: !!document.body.innerText.includes('Scan Project'),
-          licence: licence.status.state,
-          features: Object.keys(licence.features),
-          junkKeyRejected: rejected.status.state === 'invalid' && rejected.saved === false,
-        }
-      })()`)
+      const report = (await window!.webContents.executeJavaScript(PROBE_SOURCE)) as
+        SmokeReport | undefined
       const shot = process.argv.find((a) => a.startsWith('--smoke-shot='))?.split('=')[1]
-      if (shot) {
-        const image = await window!.webContents.capturePage()
-        await fsp.writeFile(shot, image.toPNG())
-      }
+      if (shot && window)
+        await fsp.writeFile(shot, (await window.webContents.capturePage()).toPNG())
       console.log('SMOKE ' + JSON.stringify(report))
-      app.exit(report?.bridge && report?.apiHealth && report?.scanButton ? 0 : 1)
+      app.exit(smokePassed(report) ? 0 : 1)
       return
     }
 

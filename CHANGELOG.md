@@ -46,9 +46,16 @@ RepoScope ships as a desktop app, with in-app updates and offline licensing.
 - `.github/workflows/release.yml` builds installers for Windows, macOS and Linux on a `v*`
   tag, checks the tag matches `package.json`, generates a checksum per artifact and fails if
   an installer came out without one.
-- A `--smoke` flag on the desktop shell that launches it, exercises the preload bridge, the
-  embedded analyzer and licence rejection, reports what it found and exits. CI runs it under
-  `xvfb`, because compiling proves none of that.
+- A `--smoke` flag on the desktop shell that launches it, exercises the preload bridge, runs
+  **a real scan through the app's own API**, and reports what it found before exiting. The
+  scan is the point: it reports `parsedFiles` against `regexFiles`, which is what catches a
+  build where the tree-sitter grammars did not survive packaging — the analyzer would fall
+  back to regular expressions and still return a perfectly plausible result. CI runs it on
+  the source tree, and the release workflow runs it against the packaged artifact.
+- An application icon (`build/icon.png`), drawn from the wordmark already in the UI —
+  otherwise the installed app would have carried the default Electron logo.
+- Install instructions in the README, including what the unsigned-installer warnings look
+  like on each platform and how to check a download against its published checksum.
 
 ### Fixed
 

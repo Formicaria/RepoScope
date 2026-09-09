@@ -9,3 +9,4 @@ benchmarks/snapshot.json
 .bench-cache/
 dist-electron/
 release/
+RELEASE_MSG.txt

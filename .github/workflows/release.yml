@@ -73,6 +73,23 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run desktop:pack
 
+      # The artifact itself, not the source it was built from. This is what catches a build
+      # where the tree-sitter grammars did not survive packaging: the analyzer would fall
+      # back to regular expressions and still return a perfectly plausible result. Only
+      # Linux can run its own artifact headlessly on a runner, so that is where it runs.
+      - name: Smoke-test the packaged app
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          for app in release/*.AppImage; do
+            chmod +x "$app"
+            xvfb-run -a "$app" --appimage-extract-and-run --no-sandbox --smoke | tee smoke.txt
+            grep -q '"regexFiles":0' smoke.txt || {
+              echo "The packaged app did not parse with tree-sitter — the grammars did not survive packaging."
+              exit 1
+            }
+          done
+
       - name: Checksum every installer
         shell: bash
         run: |

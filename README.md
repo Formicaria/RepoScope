@@ -70,11 +70,44 @@ npm start
 
 ## Desktop app
 
-RepoScope also ships as a desktop application, so a scan is a double-click rather than two terminals.
+RepoScope ships as a desktop application, so a scan is a double-click rather than two terminals.
+
+### Install
+
+Download the installer for your platform from the [latest release](https://github.com/Formicaria/RepoScope/releases/latest):
+
+| Platform    | File                             | Notes                                                                                |
+| ----------- | -------------------------------- | ------------------------------------------------------------------------------------ |
+| **Windows** | `RepoScope-Setup-<version>.exe`  | Installs per-user, so no administrator prompt. You can change the install directory. |
+| **macOS**   | `RepoScope-<version>-<arch>.dmg` | `arm64` for Apple silicon, `x64` for Intel.                                          |
+| **Linux**   | `RepoScope-<version>.AppImage`   | `chmod +x` it and run — nothing to install.                                          |
+
+**The installers are not code-signed yet**, so the first launch needs one extra step:
+
+- **Windows** shows "Windows protected your PC". Click **More info → Run anyway**. The SmartScreen warning appears because the installer carries no Authenticode certificate — not because anything was detected in it.
+- **macOS** refuses to open it ("cannot be opened because the developer cannot be verified"). Right-click the app → **Open**, then confirm; or `xattr -d com.apple.quarantine /Applications/RepoScope.app`.
+- **Linux** needs the executable bit: `chmod +x RepoScope-*.AppImage`.
+
+Certificates are on the [roadmap](ROADMAP.md). Until then, every release publishes a `.sha256` next to its installer, so you can check what you downloaded is what was built:
+
+```bash
+sha256sum -c RepoScope-Setup-0.8.0.exe.sha256    # Linux / Git Bash
+shasum -a 256 -c RepoScope-0.8.0-arm64.dmg.sha256 # macOS
+```
+
+```powershell
+# Windows PowerShell
+(Get-FileHash .\RepoScope-Setup-0.8.0.exe -Algorithm SHA256).Hash -eq `
+  ((Get-Content .\RepoScope-Setup-0.8.0.exe.sha256) -split ' ')[0]
+```
+
+**`git` is worth having on your PATH.** Scanning a GitHub URL shallow-clones it, which needs git; scanning a folder does not. RepoScope tells you in Settings if it cannot find git rather than letting a scan fail with no explanation.
+
+### Build it yourself
 
 ```bash
 npm run desktop:dev    # build the client, compile the shell, launch it
-npm run desktop:pack   # produce an installer in release/
+npm run desktop:pack   # produce an installer in release/ for the current platform
 ```
 
 The shell hosts the same Express analyzer the web build uses, in-process, and points a window at it — there is one analyzer and one UI, so the desktop build cannot drift from the browser build. It binds **127.0.0.1 on an ephemeral port**: an installed app listening on every interface would quietly expose a repository scanner to the local network. The window gets no Node access (`contextIsolation`, no `nodeIntegration`) and reaches the host through a preload bridge with four named methods.
